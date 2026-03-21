@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
+import Children from '../views/Children.vue'
 import Rules from '../views/Rules.vue'
 import Config from '../views/Config.vue'
 
@@ -9,6 +10,12 @@ const routes = [
     name: 'Dashboard',
     component: Dashboard,
     meta: { title: '仪表盘', icon: '📊' }
+  },
+  {
+    path: '/children',
+    name: 'Children',
+    component: Children,
+    meta: { title: '孩子管理', icon: '👶' }
   },
   {
     path: '/rules',
