@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
 import Rules from '../views/Rules.vue'
 import Config from '../views/Config.vue'
@@ -25,7 +25,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory('/adventurer-bank/'),
+  history: createWebHashHistory(),  // 使用 hash 模式
   routes
 })
 

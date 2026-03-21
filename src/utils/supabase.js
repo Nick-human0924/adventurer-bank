@@ -1,80 +1,92 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Supabase 配置
-const SUPABASE_URL = 'https://agkemugaxrhrsnbyiluw.supabase.co'
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna2VtdWdheHJocnNuYnlpbHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNjEzNTIsImV4cCI6MjA4OTYzNzM1Mn0.eGg3eo7PLrgcjHfLeOW5vq7ElMQbGT2I4RPpxmPdLUo'
+// Supabase 配置 - 从环境变量或默认值
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://agkemugaxrhrsnbyiluw.supabase.co'
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna2VtdWdheHJocnNuYnlpbHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNjEzNTIsImV4cCI6MjA4OTYzNzM1Mn0.eGg3eo7PLrgcjHfLeOW5vq7ElMQbGT2I4RPpxmPdLUo'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
-// 数据库表结构说明
-export const DB_SCHEMA = {
-  children: {
-    id: 'uuid',
-    name: 'string',
-    avatar: 'string',
-    total_points: 'number',
-    current_balance: 'number',
-    created_at: 'timestamp'
+// 数据库连接状态
+export let dbStatus = {
+  connected: false,
+  tablesExist: {
+    children: false,
+    rules: false,
+    transactions: false
   },
-  rules: {
-    id: 'uuid',
-    name: 'string',
-    description: 'text',
-    points: 'number',
-    type: 'good|bad',
-    icon: 'string',
-    is_active: 'boolean',
-    created_at: 'timestamp'
-  },
-  transactions: {
-    id: 'uuid',
-    child_id: 'uuid',
-    rule_id: 'uuid',
-    points: 'number',
-    type: 'earn|spend',
-    note: 'text',
-    created_at: 'timestamp'
+  error: null
+}
+
+// 检查表是否存在
+async function checkTable(tableName) {
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .limit(1)
+    
+    if (error) {
+      // 42P01 = 表不存在
+      if (error.code === '42P01') {
+        console.error(`❌ 表 '${tableName}' 不存在`)
+        return { exists: false, error: 'TABLE_NOT_FOUND' }
+      }
+      // 其他错误（可能是权限或网络）
+      console.error(`❌ 检查表 '${tableName}' 出错:`, error.message)
+      return { exists: false, error: error.code }
+    }
+    
+    console.log(`✅ 表 '${tableName}' 存在`)
+    return { exists: true, error: null }
+  } catch (err) {
+    console.error(`❌ 检查表 '${tableName}' 异常:`, err)
+    return { exists: false, error: 'EXCEPTION' }
   }
 }
 
-// 初始化数据库表
+// 初始化数据库检查
 export async function initDatabase() {
+  console.log('🔍 正在检查数据库连接...')
+  
   try {
-    // 检查 children 表
-    const { data: childrenData, error: childrenError } = await supabase
-      .from('children')
-      .select('*')
-      .limit(1)
+    // 检查各个表
+    const childrenCheck = await checkTable('children')
+    const rulesCheck = await checkTable('rules')
+    const transactionsCheck = await checkTable('transactions')
     
-    if (childrenError && childrenError.code === '42P01') {
-      console.log('需要创建 children 表')
-    }
-
-    // 检查 rules 表
-    const { data: rulesData, error: rulesError } = await supabase
-      .from('rules')
-      .select('*')
-      .limit(1)
+    dbStatus.tablesExist.children = childrenCheck.exists
+    dbStatus.tablesExist.rules = rulesCheck.exists
+    dbStatus.tablesExist.transactions = transactionsCheck.exists
     
-    if (rulesError && rulesError.code === '42P01') {
-      console.log('需要创建 rules 表')
-    }
-
-    // 检查 transactions 表
-    const { data: transData, error: transError } = await supabase
-      .from('transactions')
-      .select('*')
-      .limit(1)
+    // 所有表都存在才算连接成功
+    const allTablesExist = childrenCheck.exists && rulesCheck.exists && transactionsCheck.exists
     
-    if (transError && transError.code === '42P01') {
-      console.log('需要创建 transactions 表')
+    if (allTablesExist) {
+      dbStatus.connected = true
+      dbStatus.error = null
+      console.log('✅ 数据库连接成功，所有表都存在')
+    } else {
+      dbStatus.connected = false
+      dbStatus.error = 'MISSING_TABLES'
+      console.error('❌ 数据库连接失败：部分表不存在')
+      console.log('💡 请运行 init_database.sql 脚本创建数据表')
     }
-
-    return { success: true, message: '数据库检查完成' }
+    
+    return {
+      success: allTablesExist,
+      status: dbStatus
+    }
   } catch (error) {
-    console.error('数据库初始化错误:', error)
-    return { success: false, error }
+    dbStatus.connected = false
+    dbStatus.error = error.message || 'UNKNOWN_ERROR'
+    console.error('❌ 数据库初始化错误:', error)
+    return { success: false, error: error.message, status: dbStatus }
   }
+}
+
+// 获取数据库状态
+export function getDbStatus() {
+  return dbStatus
 }
 
 // 获取实时数据

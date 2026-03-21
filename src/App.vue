@@ -1,5 +1,16 @@
 <template>
   <div class="app">
+    <!-- 数据库警告条 -->
+    <div v-if="showDbWarning" class="db-warning-banner">
+      <span class="warning-icon">⚠️</span>
+      <span class="warning-text">
+        数据库未初始化！请前往 Supabase 控制台运行 init_database.sql 脚本
+      </span>
+      <a href="https://supabase.com/dashboard/project/agkemugaxhrsnbyiluw/sql/new" target="_blank" class="warning-link">
+        打开 SQL Editor →
+      </a>
+    </div>
+    
     <nav class="sidebar">
       <div class="logo">
         <h1>🏦 儿童行为银行</h1>
@@ -25,15 +36,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, getCurrentInstance } from 'vue'
 import { useRoute } from 'vue-router'
-import { supabase } from './utils/supabase.js'
+import { supabase, getDbStatus } from './utils/supabase.js'
 import router from './router'
 
 const isConnected = ref(false)
 const $route = useRoute()
+const { proxy } = getCurrentInstance()
 
 const routes = computed(() => router.getRoutes())
+
+// 数据库警告状态
+const showDbWarning = computed(() => {
+  if (!proxy.$dbStatus) return false
+  const status = proxy.$dbStatus.value
+  return !status.checking && !status.connected
+})
 
 onMounted(async () => {
   try {
@@ -49,6 +68,46 @@ onMounted(async () => {
 </script>
 
 <style>
+.db-warning-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  color: white;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 9999;
+  font-size: 0.95rem;
+  box-shadow: 0 2px 10px rgba(255, 75, 43, 0.3);
+}
+
+.db-warning-banner .warning-icon {
+  font-size: 1.3rem;
+}
+
+.db-warning-banner .warning-text {
+  font-weight: 500;
+}
+
+.db-warning-banner .warning-link {
+  color: white;
+  text-decoration: underline;
+  font-weight: 600;
+  margin-left: 10px;
+  padding: 4px 12px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 6px;
+  transition: background 0.3s;
+}
+
+.db-warning-banner .warning-link:hover {
+  background: rgba(255,255,255,0.3);
+}
+
 * {
   margin: 0;
   padding: 0;
