@@ -1,6 +1,13 @@
 <template>
   <div class="dashboard">
-    <h2 class="page-title">📊 仪表盘</h2>
+    <!-- 页面标题和刷新按钮 -->
+    <div class="page-header">
+      <h2 class="page-title">📊 仪表盘</h2>
+      <button class="refresh-btn" @click="refreshData" :disabled="isRefreshing">
+        <span v-if="isRefreshing">🔄 刷新中...</span>
+        <span v-else>🔄 刷新</span>
+      </button>
+    </div>
     
     <!-- 统计卡片 -->
     <div class="stats-grid">
@@ -188,6 +195,7 @@ const trendChart = ref(null)
 const pieChart = ref(null)
 const showAddPoints = ref(false)
 const showDeductPoints = ref(false)
+const isRefreshing = ref(false)
 
 const stats = reactive({
   totalChildren: 0,
@@ -438,12 +446,20 @@ async function quickRecordTransaction(rule) {
 
 // 刷新数据
 async function refreshData() {
-  await Promise.all([
-    loadStats(),
-    loadChildren(),
-    loadRules(),
-    loadTransactions()
-  ])
+  isRefreshing.value = true
+  try {
+    await Promise.all([
+      loadStats(),
+      loadChildren(),
+      loadRules(),
+      loadTransactions()
+    ])
+    console.log('✅ 数据刷新完成')
+  } catch (error) {
+    console.error('❌ 刷新数据失败:', error)
+  } finally {
+    isRefreshing.value = false
+  }
 }
 
 // 格式化日期
@@ -467,24 +483,85 @@ onMounted(async () => {
   
   // 订阅实时更新
   subscriptions.push(
-    subscribeToTable('transactions', () => {
+    subscribeToTable('transactions', (payload) => {
+      console.log('🔄 收到transactions更新:', payload)
       loadTransactions()
+      loadStats()
+      loadChildren() // 刷新孩子积分
+    })
+  )
+  
+  subscriptions.push(
+    subscribeToTable('children', (payload) => {
+      console.log('🔄 收到children更新:', payload)
+      loadChildren()
       loadStats()
     })
   )
+  
+  // 定时轮询（每10秒刷新一次，作为备份）
+  const pollInterval = setInterval(() => {
+    console.log('⏰ 定时刷新数据')
+    refreshData()
+  }, 10000)
+  
+  // 页面可见性变化时刷新
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      console.log('👁️ 页面可见，刷新数据')
+      refreshData()
+    }
+  })
+  
+  // 保存interval用于清理
+  subscriptions.push({
+    unsubscribe: () => clearInterval(pollInterval)
+  })
 })
 
 onUnmounted(() => {
-  subscriptions.forEach(sub => sub.unsubscribe())
+  subscriptions.forEach(sub => {
+    if (sub && typeof sub.unsubscribe === 'function') {
+      sub.unsubscribe()
+    }
+  })
   trendChartInstance?.dispose()
   pieChartInstance?.dispose()
 })
 </script>
 
 <style scoped>
-.page-title {
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 24px;
+}
+
+.page-title {
+  margin: 0;
   color: #333;
+}
+
+.refresh-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #11998e, #38ef7d);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .charts-grid {
