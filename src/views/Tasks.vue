@@ -1,757 +1,612 @@
 <template>
   <div class="tasks-page">
+    <!-- 页面头部 -->
     <div class="page-header">
-      <h2>🎯 任务与闯关</h2>
-      <button class="btn btn-primary" @click="showAddModal = true">
-        <span>+</span> 发布任务
+      <div class="header-left">
+        <span class="header-icon">🚩</span>
+        <div class="header-text">
+          <h2>任务与闯关</h2>
+          <p>设置挑战目标，赢取丰厚奖励！</p>
+        </div>
+      </div>
+      <button class="btn btn-primary create-task-btn" @click="openCreateModal">
+        <span class="plus-icon">+</span>
+        <span>发布新任务</span>
       </button>
     </div>
 
-    <!-- 任务统计 -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-icon blue">📋</div>
-        <div class="stat-content">
-          <h3>进行中</h3>
-          <div class="number">{{ activeTasks.length }}</div>
+    <!-- 空状态：推荐任务模板 -->
+    <div v-if="tasks.length === 0 && !showCreateModal" class="empty-state">
+      <div class="empty-illustration">
+        <span class="empty-emoji">🎯</span>
+        <div class="floating-icons">
+          <span>🏆</span>
+          <span>⭐</span>
+          <span>🎉</span>
         </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-icon green">✅</div>
-        <div class="stat-content">
-          <h3>今日完成</h3>
-          <div class="number">{{ todayCompleted }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon orange">🏆</div>
-        <div class="stat-content">
-          <h3>累计完成</h3>
-          <div class="number">{{ totalCompleted }}</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon purple">💎</div>
-        <div class="stat-content">
-          <h3>今日积分</h3>
-          <div class="number">{{ todayPoints }}</div>
+      <h3>还没有任务？从模板开始吧！</h3>
+      <p>选择一个推荐模板，快速创建第一个任务</p>
+      
+      <div class="template-cards">
+        <div 
+          v-for="template in taskTemplates" 
+          :key="template.id"
+          class="template-card"
+          @click="selectTemplate(template)"
+        >
+          <div class="template-icon">{{ template.icon }}</div>
+          <h4>{{ template.name }}</h4>
+          <p>{{ template.desc }}</p>
+          <div class="template-reward">
+            <span class="points">+{{ template.points }}</span>
+            <span class="difficulty" :class="template.difficulty">
+              {{ template.difficultyText }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 任务列表 -->
-    <div class="tasks-section">
-      <div class="section-tabs">
-        <button 
-          :class="['tab-btn', { active: activeTab === 'daily' }]"
-          @click="activeTab = 'daily'"
-      >
-          📅 日常任务
-        </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'challenge' }]"
-          @click="activeTab = 'challenge'"
-        >
-          🏆 挑战任务
-        </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'streak' }]"
-          @click="activeTab = 'streak'"
-        >
-          🔥 连续挑战
-        </button>
-        <button 
-          :class="['tab-btn', { active: activeTab === 'completed' }]"
-          @click="activeTab = 'completed'"
-        >
-          ✅ 已完成
-        </button>
-      </div>
-
-      <div class="tasks-list">
-        <div 
-          v-for="task in filteredTasks" 
-          :key="task.id"
-          :class="['task-card', task.status, task.type]"
-        >
-          <div class="task-header">
-            <div class="task-icon">{{ task.icon || '📋' }}</div>
-            <div class="task-info">
-              <h4>{{ task.title }}</h4>
-              <p class="task-desc">{{ task.description }}</p>
-              <div class="task-meta">
-                <span class="task-type">{{ 
-                  task.type === 'daily' ? '📅 日常' : 
-                  task.type === 'challenge' ? '🏆 挑战' : 
-                  '🔥 连续' 
-                }}</span>
-                <span class="task-points">+{{ task.points }} 积分</span>
-                <span v-if="task.due_date" class="task-due">⏰ {{ formatDate(task.due_date) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="task-assignees">
-            <div 
-              v-for="child in task.children" 
-              :key="child.id"
-              :class="['assignee', { 
-                completed: child.completed 
-              }]"
-            >
-              <span class="avatar">{{ child.avatar || '👶' }}</span>
-              <span class="name">{{ child.name }}</span>
-              
-              <!-- 连续挑战 -->
-              <template v-if="task.type === 'streak'">
-                <button 
-                  v-if="!isTodayCompleted(task, child.id)"
-                  class="btn-complete"
-                  @click="completeTask(task, child)"
-                >
-                  打卡
-                </button>
-                <span v-else class="completed-badge">今日已打卡 ✅</span>
-              </template>
-              
-              <!-- 普通/挑战任务 -->
-              <template v-else>
-                <button 
-                  v-if="!child.completed"
-                  class="btn-complete"
-                  @click="completeTask(task, child)"
-                >
-                  完成
-                </button>
-                <span v-else class="completed-badge">✅</span>
-              </template>
-            </div>
-          </div>
-
-          <!-- 连续挑战进度日历 -->
-          <div v-if="task.type === 'streak' && task.progress" class="streak-progress">
-            <div class="progress-header">
-              <span class="progress-title">📅 进度追踪</span>
-              <span class="progress-count">{{ task.completedDays || 0 }}/{{ task.duration_days }} 天</span>
-            </div>
-            <div class="progress-calendar">
-              <div 
-                v-for="(day, index) in task.progress" 
-                :key="index"
-                :class="['day-cell', { completed: day.completed, today: day.isToday }]"
-                :title="day.date"
-              >
-                <span class="day-number">{{ index + 1 }}</span>
-                <span class="day-status">{{ day.completed ? '✅' : '○' }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="task-actions">
-            <button class="btn-icon" @click="editTask(task)" title="编辑">✏️</button>
-            <button class="btn-icon" @click="deleteTask(task.id)" title="删除">🗑️</button>
-          </div>
-        </div>
-
-        <!-- 空状态 -->
-        <div v-if="filteredTasks.length === 0" class="empty-state">
-          <div class="empty-icon">📝</div>
-          <p>{{ emptyMessage }}</p>
-          <button v-if="activeTab !== 'completed'" class="btn btn-primary" @click="showAddModal = true">
-            发布第一个任务
+    <!-- 任务列表（卡片流布局） -->
+    <div v-else class="tasks-container">
+      <!-- 过滤器 -->
+      <div class="filter-bar">
+        <div class="filter-tabs">
+          <button 
+            v-for="tab in filterTabs" 
+            :key="tab.value"
+            class="filter-tab"
+            :class="{ active: currentFilter === tab.value }"
+            @click="currentFilter = tab.value"
+          >
+            <span class="tab-icon">{{ tab.icon }}</span>
+            <span>{{ tab.label }}</span>
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- 添加/编辑任务弹窗 -->
-    <div v-if="showAddModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ isEditing ? '编辑任务' : '发布任务' }}</h3>
-          <button class="close-btn" @click="closeModal">×</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="form-group">
-            <label>任务类型</label>
-            <div class="type-selector">
-              <button 
-                :class="['type-btn', { active: form.type === 'daily' }]"
-                @click="form.type = 'daily'"
-              >
-                📅 日常任务
-              </button>
-              <button 
-                :class="['type-btn', { active: form.type === 'challenge' }]"
-                @click="form.type = 'challenge'"
-              >
-                🏆 挑战任务
-              </button>
-              <button 
-                :class="['type-btn', { active: form.type === 'streak' }]"
-                @click="form.type = 'streak'"
-              >
-                🔥 连续挑战
-              </button>
-            </div>
+      <!-- 任务卡片流 -->
+      <div class="tasks-flow">
+        <div 
+          v-for="task in filteredTasks" 
+          :key="task.id"
+          class="task-card"
+          :class="[task.type, task.status]"
+        >
+          <!-- 任务状态标签 -->
+          <div class="task-status-badge" :class="task.status">
+            {{ getStatusText(task.status) }}
           </div>
 
-          <!-- 连续挑战特有字段 -->
-          <div v-if="form.type === 'streak'" class="streak-fields">
-            <div class="form-row">
-              <div class="form-group">
-                <label>开始日期 *</label>
-                <input v-model="form.start_date" type="date" />
-              </div>
-              <div class="form-group">
-                <label>持续天数 *</label>
-                <input v-model.number="form.duration_days" type="number" min="2" max="30" />
+          <!-- 任务头部 -->
+          <div class="task-header">
+            <div class="task-icon">{{ task.icon || getTaskIcon(task.type) }}</div>
+            <div class="task-info">
+              <h4 class="task-title">{{ task.title }}</h4>
+              <div class="task-tags">
+                <span class="tag type-tag" :class="task.type">
+                  {{ getTypeText(task.type) }}
+                </span>
+                <span v-if="task.is_repeatable" class="tag repeat-tag">
+                  🔄 可重复
+                </span>
               </div>
             </div>
-            <p class="hint">需要连续 {{ form.duration_days }} 天完成才能获得奖励</p>
-          </div>
-
-          <div class="form-group">
-            <label>任务标题 *</label>
-            <input v-model="form.title" type="text" placeholder="例如：整理房间" />
-          </div>
-
-          <div class="form-group">
-            <label>任务描述</label>
-            <textarea v-model="form.description" rows="3" placeholder="详细描述任务要求..."></textarea>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>积分奖励 *</label>
-              <input v-model.number="form.points" type="number" min="1" />
-            </div>
-            <div class="form-group">
-              <label>截止日期</label>
-              <input v-model="form.due_date" type="date" />
+            <div class="task-points" :class="{ 'points-bounce': animatingTask === task.id }">
+              +{{ task.points }}
             </div>
           </div>
 
-          <div class="form-group">
-            <label>选择图标</label>
-            <div class="icon-selector">
+          <!-- 任务描述 -->
+          <p v-if="task.description" class="task-desc">{{ task.description }}</p>
+
+          <!-- 任务进度（如果是连续任务） -->
+          <div v-if="task.type === 'streak' && task.current_streak > 0" class="streak-progress">
+            <div class="streak-bar">
+              <div 
+                class="streak-fill" 
+                :style="{ width: Math.min((task.current_streak / task.target_streak) * 100, 100) + '%' }"
+              ></div>
+            </div>
+            <span class="streak-text">
+              🔥 连续 {{ task.current_streak }}/{{ task.target_streak }} 天
+            </span>
+          </div>
+
+          <!-- 分配的孩子 -->
+          <div v-if="task.children && task.children.length > 0" class="task-assignees">
+            <span class="assignee-label">分配给：</span>
+            <div class="assignee-avatars">
               <span 
-                v-for="icon in iconOptions" 
-                :key="icon"
-                :class="['icon-option', { active: form.icon === icon }]"
-                @click="form.icon = icon"
+                v-for="child in task.children.slice(0, 3)" 
+                :key="child.id"
+                class="assignee-avatar"
+                :title="child.name"
               >
-                {{ icon }}
+                {{ child.avatar || '👶' }}
+              </span>
+              <span v-if="task.children.length > 3" class="assignee-more">
+                +{{ task.children.length - 3 }}
               </span>
             </div>
           </div>
 
-          <div class="form-group">
-            <label>分配给</label>
-            <div class="child-selector">
-              <label 
-                v-for="child in allChildren" 
-                :key="child.id"
-                class="child-checkbox"
-              >
-                <input 
-                  type="checkbox" 
-                  :value="child.id"
-                  v-model="form.child_ids"
-                />
-                <span class="avatar">{{ child.avatar || '👶' }}</span>
-                <span>{{ child.name }}</span>
-              </label>
-            </div>
+          <!-- 任务操作 -->
+          <div class="task-actions">
+            <button 
+              v-if="task.status !== 'completed'"
+              class="btn btn-complete"
+              @click="completeTask(task)"
+              :disabled="completingTask === task.id"
+            >
+              <span v-if="completingTask === task.id">⏳</span>
+              <span v-else>✅ 完成任务</span>
+            </button>
+            <button v-else class="btn btn-completed" disabled>
+              🎉 已完成
+            </button>
+            <button class="btn btn-edit" @click="editTask(task)">
+              ✏️ 编辑
+            </button>
+            <button class="btn btn-delete" @click="deleteTask(task)">
+              🗑️ 删除
+            </button>
           </div>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn" @click="closeModal">取消</button>
-          <button class="btn btn-primary" @click="saveTask" :disabled="!form.title || form.points < 1">
-            {{ isEditing ? '保存' : '发布' }}
-          </button>
         </div>
       </div>
     </div>
 
-    <!-- 完成确认弹窗 -->
-    <div v-if="showCompleteModal" class="modal-overlay" @click.self="showCompleteModal = false">
+    <!-- 创建/编辑任务弹窗 -->
+    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>确认完成任务</h3>
-          <button class="close-btn" @click="showCompleteModal = false">×</button>
+          <h3>{{ editingTask ? '✏️ 编辑任务' : '📝 发布新任务' }}</h3>
+          <button class="close-btn" @click="closeModal">&times;</button>
         </div>
-
-        <div class="modal-body">
-          <p v-if="completingTask">
-            确认 <strong>{{ completingChild?.name }}</strong> 完成了任务
-            <strong>"{{ completingTask?.title }}"</strong>？
-          </p>
-          <p class="points-info">
-            将获得 <span class="points">+{{ completingTask?.points }}</span> 积分
-          </p>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn" @click="showCompleteModal = false">取消</button>
-          <button class="btn btn-success" @click="confirmComplete">确认完成</button>
-        </div>
+        
+        <form @submit.prevent="saveTask">
+          <div class="form-group">
+            <label>任务名称</label>
+            <input v-model="taskForm.title" required placeholder="例如：早起挑战">
+          </div>
+          
+          <div class="form-group">
+            <label>任务类型</label>
+            <div class="type-selector">
+              <button 
+                v-for="type in taskTypes" 
+                :key="type.value"
+                type="button"
+                class="type-btn"
+                :class="{ active: taskForm.type === type.value }"
+                @click="taskForm.type = type.value"
+              >
+                <span class="type-icon">{{ type.icon }}</span>
+                <span>{{ type.label }}</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label>奖励积分</label>
+              <input v-model.number="taskForm.points" type="number" min="1" required>
+            </div>
+            <div class="form-group">
+              <label>任务图标</label>
+              <select v-model="taskForm.icon">
+                <option v-for="icon in taskIcons" :key="icon.value" :value="icon.value">
+                  {{ icon.value }} {{ icon.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+          
+          <!-- 连续任务设置 -->
+          <div v-if="taskForm.type === 'streak'" class="form-group">
+            <label>目标连续天数</label>
+            <input v-model.number="taskForm.target_streak" type="number" min="2" max="30" required>
+            <small class="form-hint">连续完成指定天数后获得奖励</small>
+          </div>
+          
+          <div class="form-group">
+            <label>任务描述</label>
+            <textarea v-model="taskForm.description" rows="2" placeholder="任务详情说明...">
+            </textarea>
+          </div>
+          
+          <div class="form-group">
+            <label>分配给孩子</label>
+            <div class="child-selector">
+              <label 
+                v-for="child in children" 
+                :key="child.id"
+                class="child-checkbox"
+                :class="{ checked: taskForm.child_ids.includes(child.id) }"
+              >
+                <input 
+                  type="checkbox" 
+                  :value="child.id"
+                  v-model="taskForm.child_ids"
+                >
+                <span class="child-avatar">{{ child.avatar || '👶' }}</span>
+                <span class="child-name">{{ child.name }}</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="taskForm.is_repeatable">
+              <span>可重复完成（日常任务）</span>
+            </label>
+          </div>
+          
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" @click="closeModal">取消</button>
+            <button type="submit" class="btn btn-primary" :disabled="saving">
+              {{ saving ? '保存中...' : (editingTask ? '更新' : '发布') }}
+            </button>
+          </div>
+        </form>
       </div>
+    </div>
+
+    <!-- 完成动画 -->
+    <div v-if="showCompletionAnimation" class="completion-animation">
+      <div class="celebration">
+        <span class="celebration-icon">🎉</span>
+        <span class="celebration-icon">⭐</span>
+        <span class="celebration-icon">🏆</span>
+      </div>
+      <h2>任务完成！</h2>
+      <p>获得 +{{ completedTaskPoints }} 积分</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { supabase } from '../utils/supabase.js'
 
 const tasks = ref([])
-const allChildren = ref([])
-const activeTab = ref('daily')
-const showAddModal = ref(false)
-const showCompleteModal = ref(false)
-const isEditing = ref(false)
-const editingId = ref(null)
+const children = ref([])
+const showCreateModal = ref(false)
+const editingTask = ref(null)
+const saving = ref(false)
 const completingTask = ref(null)
-const completingChild = ref(null)
+const animatingTask = ref(null)
+const showCompletionAnimation = ref(false)
+const completedTaskPoints = ref(0)
+const currentFilter = ref('all')
 
-const iconOptions = ['📋', '✅', '🏆', '📚', '🧹', '🎨', '🏃', '🎵', '🤝', '💪', '🧠', '🎯', '⭐']
+// 任务模板
+const taskTemplates = [
+  { 
+    id: 'early_bird', 
+    name: '早起小鸟', 
+    icon: '🌅', 
+    desc: '每天7点前起床，养成早睡早起好习惯',
+    points: 5,
+    difficulty: 'easy',
+    difficultyText: '简单',
+    type: 'daily',
+    is_repeatable: true
+  },
+  { 
+    id: 'reading_time', 
+    name: '阅读时光', 
+    icon: '📚', 
+    desc: '每天阅读30分钟，探索知识的海洋',
+    points: 8,
+    difficulty: 'medium',
+    difficultyText: '中等',
+    type: 'daily',
+    is_repeatable: true
+  },
+  { 
+    id: 'housework_master', 
+    name: '家务小能手', 
+    icon: '🧹', 
+    desc: '完成一项家务任务，成为家庭好帮手',
+    points: 10,
+    difficulty: 'medium',
+    difficultyText: '中等',
+    type: 'challenge',
+    is_repeatable: false
+  },
+  { 
+    id: 'exercise_hero', 
+    name: '运动健将', 
+    icon: '⚽', 
+    desc: '坚持运动7天，强健体魄',
+    points: 15,
+    difficulty: 'hard',
+    difficultyText: '挑战',
+    type: 'streak',
+    target_streak: 7,
+    is_repeatable: false
+  }
+]
 
-const form = ref({
-  type: 'daily',
+// 过滤器
+const filterTabs = [
+  { value: 'all', label: '全部', icon: '📋' },
+  { value: 'daily', label: '日常', icon: '📅' },
+  { value: 'challenge', label: '挑战', icon: '🎯' },
+  { value: 'streak', label: '连续', icon: '🔥' }
+]
+
+// 任务类型
+const taskTypes = [
+  { value: 'daily', label: '日常任务', icon: '📅' },
+  { value: 'challenge', label: '挑战任务', icon: '🎯' },
+  { value: 'streak', label: '连续任务', icon: '🔥' }
+]
+
+// 任务图标
+const taskIcons = [
+  { value: '📋', label: '默认' },
+  { value: '🌅', label: '早起' },
+  { value: '📚', label: '阅读' },
+  { value: '🧹', label: '家务' },
+  { value: '⚽', label: '运动' },
+  { value: '🎨', label: '艺术' },
+  { value: '🎹', label: '音乐' },
+  { value: '🧮', label: '学习' },
+  { value: '🥗', label: '健康' },
+  { value: '💝', label: '爱心' },
+  { value: '🏆', label: '成就' },
+  { value: '⭐', label: '星星' }
+]
+
+// 表单
+const taskForm = reactive({
   title: '',
-  description: '',
+  type: 'daily',
   points: 5,
-  due_date: '',
   icon: '📋',
+  description: '',
   child_ids: [],
-  start_date: '',
-  duration_days: 7
+  is_repeatable: false,
+  target_streak: 7
 })
 
-// 过滤任务
+// 过滤后的任务
 const filteredTasks = computed(() => {
-  if (activeTab.value === 'completed') {
-    return tasks.value.filter(t => t.status === 'completed')
-  }
-  return tasks.value.filter(t => {
-    if (t.type !== activeTab.value) return false
-    if (activeTab.value === 'completed') return t.status === 'completed'
-    return t.status !== 'completed'
-  })
+  if (currentFilter.value === 'all') return tasks.value
+  return tasks.value.filter(t => t.type === currentFilter.value)
 })
-
-const activeTasks = computed(() => tasks.value.filter(t => t.status !== 'completed'))
-
-const emptyMessage = computed(() => {
-  const messages = {
-    daily: '还没有日常任务，发布一个吧！',
-    challenge: '还没有挑战任务，发布一个吧！',
-    streak: '还没有连续挑战，发布一个吧！',
-    completed: '还没有已完成的任务'
-  }
-  return messages[activeTab.value]
-})
-
-// 今日统计
-const todayCompleted = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
-  return tasks.value.filter(t => {
-    if (t.status !== 'completed') return false
-    const completedDate = t.completed_at?.split('T')[0]
-    return completedDate === today
-  }).length
-})
-
-const todayPoints = computed(() => {
-  const today = new Date().toISOString().split('T')[0]
-  return tasks.value.reduce((sum, t) => {
-    if (t.status !== 'completed') return sum
-    const completedDate = t.completed_at?.split('T')[0]
-    if (completedDate === today) return sum + (t.points || 0)
-    return sum
-  }, 0)
-})
-
-const totalCompleted = computed(() => tasks.value.filter(t => t.status === 'completed').length)
 
 // 加载任务
 async function loadTasks() {
-  try {
-    const { data: tasksData, error: tasksError } = await supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
-    if (tasksError) {
-      console.error('加载任务失败:', tasksError)
-      return
-    }
-
-    // 获取任务分配的孩子
-    const tasksWithChildren = await Promise.all(
-      (tasksData || []).map(async (task) => {
-        const { data: assignments } = await supabase
-          .from('task_assignments')
-          .select('child_id, completed, completed_at, children(*)')
-          .eq('task_id', task.id)
-        
-        const allCompleted = assignments?.every(a => a.completed) || false
-        
-        // 加载进度（仅连续挑战）
-        let progress = null
-        let completedDays = 0
-        if (task.type === 'streak') {
-          const { data: progressData } = await supabase
-            .from('challenge_progress')
-            .select('*')
-            .eq('task_id', task.id)
-            .order('day_number', { ascending: true })
-          
-          if (progressData) {
-            const today = new Date().toISOString().split('T')[0]
-            progress = progressData.map(p => ({
-              ...p,
-              isToday: p.progress_date === today
-            }))
-            completedDays = progressData.filter(p => p.completed).length
-          }
-        }
-        
-        return {
-          ...task,
-          children: assignments?.map(a => ({
-            id: a.child_id,
-            name: a.children?.name,
-            avatar: a.children?.avatar,
-            completed: a.completed,
-            completed_at: a.completed_at
-          })) || [],
-          status: allCompleted ? 'completed' : 'active',
-          progress,
-          completedDays
-        }
-      })
-    )
-    
-    tasks.value = tasksWithChildren
-  } catch (e) {
-    console.error('加载任务异常:', e)
-  }
-}
-
-// 加载孩子
-async function loadChildren() {
-  const { data, error } = await supabase
-    .from('children')
+  const { data: tasksData } = await supabase
+    .from('tasks')
     .select('*')
-    .order('name')
+    .order('created_at', { ascending: false })
   
-  if (error) {
-    console.error('加载孩子失败:', error)
-    return
-  }
-  
-  allChildren.value = data || []
-}
-
-// 保存任务
-async function saveTask() {
-  if (!form.value.title || form.value.points < 1) return
-
-  const taskData = {
-    type: form.value.type,
-    title: form.value.title,
-    description: form.value.description,
-    points: form.value.points,
-    due_date: form.value.due_date || null,
-    icon: form.value.icon,
-    status: 'active'
-  }
-
-  // 连续挑战特有字段
-  if (form.value.type === 'streak') {
-    taskData.start_date = form.value.start_date
-    taskData.duration_days = form.value.duration_days
-    taskData.required_completions = form.value.duration_days
-    // 计算结束日期
-    if (form.value.start_date && form.value.duration_days) {
-      const start = new Date(form.value.start_date)
-      const end = new Date(start)
-      end.setDate(start.getDate() + form.value.duration_days - 1)
-      taskData.end_date = end.toISOString().split('T')[0]
-    }
-  }
-
-  try {
-    let taskId = editingId.value
-
-    if (isEditing.value) {
-      // 更新任务
-      const { error } = await supabase
-        .from('tasks')
-        .update(taskData)
-        .eq('id', editingId.value)
-      
-      if (error) throw error
-
-      // 删除旧分配和进度
-      await supabase.from('task_assignments').delete().eq('task_id', editingId.value)
-      await supabase.from('challenge_progress').delete().eq('task_id', editingId.value)
-    } else {
-      // 创建任务
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert(taskData)
-        .select()
-      
-      if (error) throw error
-      taskId = data[0].id
-    }
-
-    // 分配给孩子
-    if (form.value.child_ids.length > 0) {
-      const assignments = form.value.child_ids.map(childId => ({
-        task_id: taskId,
-        child_id: childId,
-        completed: false
-      }))
-      await supabase.from('task_assignments').insert(assignments)
-
-      // 如果是连续挑战，初始化进度记录
-      if (form.value.type === 'streak' && form.value.start_date && form.value.duration_days) {
-        const progressRecords = []
-        for (const childId of form.value.child_ids) {
-          for (let i = 0; i < form.value.duration_days; i++) {
-            const date = new Date(form.value.start_date)
-            date.setDate(date.getDate() + i)
-            progressRecords.push({
-              task_id: taskId,
-              child_id: childId,
-              day_number: i + 1,
-              progress_date: date.toISOString().split('T')[0],
-              completed: false
-            })
-          }
-        }
-        if (progressRecords.length > 0) {
-          await supabase.from('challenge_progress').insert(progressRecords)
-        }
-      }
-    }
-
-    closeModal()
-    await loadTasks()
-  } catch (error) {
-    alert('保存失败: ' + error.message)
-  }
-}
-
-// 编辑任务
-function editTask(task) {
-  isEditing.value = true
-  editingId.value = task.id
-  form.value = {
-    type: task.type,
-    title: task.title,
-    description: task.description,
-    points: task.points,
-    due_date: task.due_date || '',
-    icon: task.icon || '📋',
-    child_ids: task.children?.map(c => c.id) || [],
-    start_date: task.start_date || '',
-    duration_days: task.duration_days || 7
-  }
-  showAddModal.value = true
-}
-
-// 删除任务
-async function deleteTask(id) {
-  if (!confirm('确定要删除这个任务吗？')) return
-
-  try {
-    // 先删除进度记录（如果有）
-    await supabase.from('challenge_progress').delete().eq('task_id', id)
-    // 删除分配
-    await supabase.from('task_assignments').delete().eq('task_id', id)
-    // 再删除任务
-    await supabase.from('tasks').delete().eq('id', id)
-    await loadTasks()
-  } catch (error) {
-    alert('删除失败: ' + error.message)
-  }
-}
-
-// 完成任务
-function completeTask(task, child) {
-  completingTask.value = task
-  completingChild.value = child
-  showCompleteModal.value = true
-}
-
-// 确认完成
-async function confirmComplete() {
-  if (!completingTask.value || !completingChild.value) return
-
-  try {
-    // 连续挑战：更新当天进度
-    if (completingTask.value.type === 'streak') {
-      const today = new Date().toISOString().split('T')[0]
-      
-      // 查找今天的进度记录
-      const { data: progressData } = await supabase
-        .from('challenge_progress')
-        .select('*')
-        .eq('task_id', completingTask.value.id)
-        .eq('child_id', completingChild.value.id)
-        .eq('progress_date', today)
-        .single()
-      
-      if (progressData && !progressData.completed) {
-        // 更新今天为已完成
-        await supabase
-          .from('challenge_progress')
-          .update({
-            completed: true,
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', progressData.id)
-        
-        // 检查是否完成了所有天数
-        const { data: allProgress } = await supabase
-          .from('challenge_progress')
-          .select('*')
-          .eq('task_id', completingTask.value.id)
-          .eq('child_id', completingChild.value.id)
-        
-        const allCompleted = allProgress?.every(p => p.completed)
-        
-        if (allCompleted) {
-          // 完成整个挑战，更新任务分配状态为完成
-          await supabase
-            .from('task_assignments')
-            .update({
-              completed: true,
-              completed_at: new Date().toISOString()
-            })
-            .eq('task_id', completingTask.value.id)
-            .eq('child_id', completingChild.value.id)
-          
-          // 创建交易记录（奖励积分）
-          await supabase.from('transactions').insert({
-            child_id: completingChild.value.id,
-            task_id: completingTask.value.id,
-            points: completingTask.value.points,
-            type: 'earn',
-            note: `完成连续挑战: ${completingTask.value.title}`
-          })
-          
-          // 更新孩子积分
-          const { data: child } = await supabase
-            .from('children')
-            .select('current_balance, total_points')
-            .eq('id', completingChild.value.id)
-            .single()
-          
-          if (child) {
-            await supabase.from('children').update({
-              current_balance: child.current_balance + completingTask.value.points,
-              total_points: child.total_points + completingTask.value.points
-            }).eq('id', completingChild.value.id)
-          }
-          
-          alert(`🎉 恭喜！${completingChild.value.name} 完成了连续挑战，获得 +${completingTask.value.points} 积分！`)
-        } else {
-          const completedCount = allProgress?.filter(p => p.completed).length || 0
-          const totalCount = allProgress?.length || completingTask.value.duration_days
-          alert(`✅ 今日打卡成功！进度: ${completedCount}/${totalCount} 天`)
-        }
-      } else if (progressData?.completed) {
-        alert('今天已经打卡过了！')
-      } else {
-        alert('今天不在挑战日期范围内！')
-      }
-    } else {
-      // 普通任务/挑战任务：直接完成
-      const { error: assignmentError } = await supabase
+  // 获取任务分配的孩子
+  const tasksWithChildren = await Promise.all(
+    (tasksData || []).map(async (task) => {
+      const { data: assignments } = await supabase
         .from('task_assignments')
-        .update({
-          completed: true,
-          completed_at: new Date().toISOString()
-        })
-        .eq('task_id', completingTask.value.id)
-        .eq('child_id', completingChild.value.id)
+        .select('child_id, children(id, name, avatar)')
+        .eq('task_id', task.id)
       
-      if (assignmentError) throw assignmentError
-
-      // 创建交易记录
-      await supabase.from('transactions').insert({
-        child_id: completingChild.value.id,
-        task_id: completingTask.value.id,
-        points: completingTask.value.points,
-        type: 'earn',
-        note: `完成任务: ${completingTask.value.title}`
-      })
-
-      // 更新孩子积分
-      const { data: child } = await supabase
-        .from('children')
-        .select('current_balance, total_points')
-        .eq('id', completingChild.value.id)
-        .single()
-
-      if (child) {
-        await supabase.from('children').update({
-          current_balance: child.current_balance + completingTask.value.points,
-          total_points: child.total_points + completingTask.value.points
-        }).eq('id', completingChild.value.id)
+      return {
+        ...task,
+        children: assignments?.map(a => a.children).filter(Boolean) || []
       }
-      
-      alert(`✅ 任务完成！${completingChild.value.name} 获得 +${completingTask.value.points} 积分`)
-    }
+    })
+  )
+  
+  tasks.value = tasksWithChildren
+}
 
-    showCompleteModal.value = false
-    await loadTasks()
-  } catch (error) {
-    alert('完成任务失败: ' + error.message)
+// 加载孩子列表
+async function loadChildren() {
+  const { data } = await supabase.from('children').select('*').order('name')
+  children.value = data || []
+}
+
+// 选择模板
+function selectTemplate(template) {
+  taskForm.title = template.name
+  taskForm.type = template.type
+  taskForm.points = template.points
+  taskForm.icon = template.icon
+  taskForm.description = template.desc
+  taskForm.is_repeatable = template.is_repeatable
+  if (template.target_streak) {
+    taskForm.target_streak = template.target_streak
   }
+  showCreateModal.value = true
+}
+
+// 打开创建弹窗
+function openCreateModal() {
+  editingTask.value = null
+  resetForm()
+  showCreateModal.value = true
 }
 
 // 关闭弹窗
 function closeModal() {
-  showAddModal.value = false
-  isEditing.value = false
-  editingId.value = null
-  form.value = {
-    type: 'daily',
-    title: '',
-    description: '',
-    points: 5,
-    due_date: '',
-    icon: '📋',
-    child_ids: [],
-    start_date: '',
-    duration_days: 7
+  showCreateModal.value = false
+  editingTask.value = null
+  resetForm()
+}
+
+// 重置表单
+function resetForm() {
+  taskForm.title = ''
+  taskForm.type = 'daily'
+  taskForm.points = 5
+  taskForm.icon = '📋'
+  taskForm.description = ''
+  taskForm.child_ids = []
+  taskForm.is_repeatable = false
+  taskForm.target_streak = 7
+}
+
+// 编辑任务
+function editTask(task) {
+  editingTask.value = task
+  taskForm.title = task.title
+  taskForm.type = task.type
+  taskForm.points = task.points
+  taskForm.icon = task.icon || '📋'
+  taskForm.description = task.description || ''
+  taskForm.is_repeatable = task.is_repeatable || false
+  taskForm.target_streak = task.target_streak || 7
+  taskForm.child_ids = task.children?.map(c => c.id) || []
+  showCreateModal.value = true
+}
+
+// 保存任务
+async function saveTask() {
+  saving.value = true
+  try {
+    const taskData = {
+      title: taskForm.title,
+      type: taskForm.type,
+      points: taskForm.points,
+      icon: taskForm.icon,
+      description: taskForm.description,
+      is_repeatable: taskForm.is_repeatable,
+      target_streak: taskForm.type === 'streak' ? taskForm.target_streak : null
+    }
+    
+    if (editingTask.value) {
+      // 更新任务
+      const { error } = await supabase
+        .from('tasks')
+        .update(taskData)
+        .eq('id', editingTask.value.id)
+      
+      if (error) throw error
+      
+      // 更新分配
+      await supabase.from('task_assignments').delete().eq('task_id', editingTask.value.id)
+      if (taskForm.child_ids.length > 0) {
+        const assignments = taskForm.child_ids.map(childId => ({
+          task_id: editingTask.value.id,
+          child_id: childId
+        }))
+        await supabase.from('task_assignments').insert(assignments)
+      }
+    } else {
+      // 创建任务
+      const { data: newTask, error } = await supabase
+        .from('tasks')
+        .insert(taskData)
+        .select()
+        .single()
+      
+      if (error) throw error
+      
+      // 分配孩子
+      if (taskForm.child_ids.length > 0) {
+        const assignments = taskForm.child_ids.map(childId => ({
+          task_id: newTask.id,
+          child_id: childId
+        }))
+        await supabase.from('task_assignments').insert(assignments)
+      }
+    }
+    
+    await loadTasks()
+    closeModal()
+  } catch (error) {
+    alert('保存失败: ' + error.message)
+  } finally {
+    saving.value = false
   }
 }
 
-// 检查今天是否已打卡（连续挑战）
-function isTodayCompleted(task, childId) {
-  if (!task.progress) return false
-  const today = new Date().toISOString().split('T')[0]
-  const todayProgress = task.progress.find(p => 
-    p.child_id === childId && p.progress_date === today
-  )
-  return todayProgress?.completed || false
+// 删除任务
+async function deleteTask(task) {
+  if (!confirm(`确定要删除任务"${task.title}"吗？`)) return
+  
+  await supabase.from('tasks').delete().eq('id', task.id)
+  await loadTasks()
 }
 
-// 格式化日期
-function formatDate(dateString) {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+// 完成任务
+async function completeTask(task) {
+  if (!task.children || task.children.length === 0) {
+    alert('请先分配孩子给这个任务')
+    return
+  }
+  
+  completingTask.value = task.id
+  animatingTask.value = task.id
+  
+  try {
+    // 为每个孩子创建交易记录
+    for (const child of task.children) {
+      await supabase.from('transactions').insert({
+        child_id: child.id,
+        points: task.points,
+        type: 'earn',
+        note: `完成任务: ${task.title}`,
+        task_id: task.id
+      })
+    }
+    
+    // 如果不是可重复任务，标记为已完成
+    if (!task.is_repeatable) {
+      await supabase.from('tasks').update({ status: 'completed' }).eq('id', task.id)
+    }
+    
+    // 显示完成动画
+    completedTaskPoints.value = task.points
+    showCompletionAnimation.value = true
+    setTimeout(() => {
+      showCompletionAnimation.value = false
+    }, 2000)
+    
+    await loadTasks()
+  } catch (error) {
+    alert('完成任务失败: ' + error.message)
+  } finally {
+    completingTask.value = null
+    setTimeout(() => {
+      animatingTask.value = null
+    }, 500)
+  }
+}
+
+// 获取状态文本
+function getStatusText(status) {
+  const statusMap = {
+    'pending': '进行中',
+    'in_progress': '进行中',
+    'completed': '已完成',
+    'cancelled': '已取消'
+  }
+  return statusMap[status] || status
+}
+
+// 获取类型文本
+function getTypeText(type) {
+  const typeMap = {
+    'daily': '日常',
+    'challenge': '挑战',
+    'streak': '连续'
+  }
+  return typeMap[type] || type
+}
+
+// 获取任务图标
+function getTaskIcon(type) {
+  const iconMap = {
+    'daily': '📅',
+    'challenge': '🎯',
+    'streak': '🔥'
+  }
+  return iconMap[type] || '📋'
 }
 
 onMounted(() => {
@@ -761,207 +616,542 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.tasks-page {
-  padding: 20px;
-}
-
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-}
-
-.page-header h2 {
-  font-size: 1.5rem;
-  color: #333;
-}
-
-.tasks-section {
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-}
-
-.section-tabs {
-  display: flex;
-  gap: 12px;
   margin-bottom: 24px;
-  border-bottom: 2px solid #e9ecef;
-  padding-bottom: 12px;
 }
 
-.tab-btn {
-  padding: 10px 20px;
-  border: none;
-  background: transparent;
-  color: #868e96;
-  font-size: 1rem;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.3s;
-}
-
-.tab-btn:hover {
-  background: #f8f9fa;
-}
-
-.tab-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.tasks-list {
+.header-left {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 16px;
 }
 
-.task-card {
-  background: #f8f9fa;
-  border-radius: 12px;
-  padding: 20px;
-  border-left: 4px solid #667eea;
+.header-icon {
+  font-size: 2.5rem;
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-text h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  color: #333;
+}
+
+.header-text p {
+  margin: 4px 0 0 0;
+  color: #868e96;
+  font-size: 0.95rem;
+}
+
+.create-task-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 24px;
+  font-size: 1rem;
+}
+
+.plus-icon {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+/* 空状态 */
+.empty-state {
+  text-align: center;
+  padding: 60px 40px;
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.empty-illustration {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 24px;
+}
+
+.empty-emoji {
+  font-size: 5rem;
+}
+
+.floating-icons {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.floating-icons span {
+  position: absolute;
+  font-size: 1.5rem;
+  animation: float 2s ease-in-out infinite;
+}
+
+.floating-icons span:nth-child(1) {
+  top: -10px;
+  left: -30px;
+  animation-delay: 0s;
+}
+
+.floating-icons span:nth-child(2) {
+  top: -5px;
+  right: -25px;
+  animation-delay: 0.5s;
+}
+
+.floating-icons span:nth-child(3) {
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  animation-delay: 1s;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.empty-state h3 {
+  font-size: 1.4rem;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.empty-state p {
+  color: #868e96;
+  margin-bottom: 32px;
+}
+
+/* 模板卡片 */
+.template-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.template-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border: 2px solid #e9ecef;
+  border-radius: 20px;
+  padding: 24px;
+  cursor: pointer;
   transition: all 0.3s;
 }
 
+.template-card:hover {
+  border-color: #667eea;
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(102, 126, 234, 0.2);
+}
+
+.template-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+
+.template-card h4 {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.template-card p {
+  margin: 0 0 16px 0;
+  font-size: 0.85rem;
+  color: #868e96;
+  line-height: 1.5;
+}
+
+.template-reward {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.template-reward .points {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.difficulty {
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.difficulty.easy {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.difficulty.medium {
+  background: #fff3bf;
+  color: #f08c00;
+}
+
+.difficulty.hard {
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+/* 过滤器 */
+.filter-bar {
+  margin-bottom: 24px;
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: white;
+  border: 2px solid #e9ecef;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #495057;
+  transition: all 0.3s;
+}
+
+.filter-tab:hover {
+  border-color: #667eea;
+}
+
+.filter-tab.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+}
+
+/* 任务卡片流 */
+.tasks-flow {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+.task-card {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+  position: relative;
+  transition: all 0.3s;
+  border-left: 4px solid #dee2e6;
+}
+
 .task-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.task-card.daily {
+  border-left-color: #4facfe;
 }
 
 .task-card.challenge {
-  border-left-color: #ff9f43;
-  background: linear-gradient(135deg, #fff8f0 0%, #fff 100%);
+  border-left-color: #f093fb;
 }
 
-.task-card.completed {
-  border-left-color: #51cf66;
-  opacity: 0.7;
+.task-card.streak {
+  border-left-color: #fa709a;
+}
+
+.task-status-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.task-status-badge.pending,
+.task-status-badge.in_progress {
+  background: #fff3bf;
+  color: #f08c00;
+}
+
+.task-status-badge.completed {
+  background: #d3f9d8;
+  color: #2b8a3e;
 }
 
 .task-header {
   display: flex;
+  align-items: flex-start;
   gap: 16px;
   margin-bottom: 16px;
 }
 
 .task-icon {
-  width: 50px;
-  height: 50px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  font-size: 2.5rem;
+  width: 60px;
+  height: 60px;
+  background: #f8f9fa;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
-}
-
-.task-card.challenge .task-icon {
-  background: linear-gradient(135deg, #ff9f43 0%, #ff6b6b 100%);
 }
 
 .task-info {
   flex: 1;
 }
 
-.task-info h4 {
-  font-size: 1.1rem;
-  margin-bottom: 6px;
+.task-title {
+  margin: 0 0 8px 0;
+  font-size: 1.15rem;
   color: #333;
 }
 
-.task-desc {
-  color: #868e96;
-  font-size: 0.9rem;
-  margin-bottom: 8px;
-}
-
-.task-meta {
+.task-tags {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.task-type {
-  background: #e9ecef;
+.tag {
   padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  color: #495057;
-}
-
-.task-points {
-  background: #d3f9d8;
-  color: #2b8a3e;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.8rem;
+  border-radius: 10px;
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
-.task-due {
-  color: #ff6b6b;
-  font-size: 0.8rem;
+.type-tag.daily {
+  background: #e7f5ff;
+  color: #1971c2;
 }
 
+.type-tag.challenge {
+  background: #f3d9fa;
+  color: #9c36b5;
+}
+
+.type-tag.streak {
+  background: #ffe0e0;
+  color: #c92a2a;
+}
+
+.repeat-tag {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.task-points {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 1.2rem;
+  transition: transform 0.3s;
+}
+
+.task-points.points-bounce {
+  animation: pointsBounce 0.5s ease-out;
+}
+
+@keyframes pointsBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+.task-desc {
+  color: #495057;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* 连续任务进度 */
+.streak-progress {
+  background: #fff5f5;
+  padding: 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.streak-bar {
+  height: 10px;
+  background: #ffe0e0;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.streak-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff6b6b, #ffa94d);
+  border-radius: 5px;
+  transition: width 0.5s ease;
+}
+
+.streak-text {
+  font-size: 0.85rem;
+  color: #c92a2a;
+  font-weight: 600;
+}
+
+/* 分配的孩子 */
 .task-assignees {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px;
-  background: white;
-  border-radius: 8px;
-}
-
-.assignee {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  margin-bottom: 16px;
+  padding: 12px;
   background: #f8f9fa;
-  border-radius: 20px;
-}
-
-.assignee.completed {
-  background: #d3f9d8;
-}
-
-.assignee .avatar {
-  font-size: 1.2rem;
-}
-
-.assignee .name {
-  font-weight: 500;
-}
-
-.btn-complete {
-  padding: 4px 12px;
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  color: white;
-  border: none;
   border-radius: 12px;
+}
+
+.assignee-label {
+  font-size: 0.85rem;
+  color: #868e96;
+}
+
+.assignee-avatars {
+  display: flex;
+  gap: -8px;
+}
+
+.assignee-avatar {
+  font-size: 1.5rem;
+  width: 36px;
+  height: 36px;
+  background: white;
+  border: 2px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -8px;
+}
+
+.assignee-avatar:first-child {
+  margin-left: 0;
+}
+
+.assignee-more {
   font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.3s;
+  width: 36px;
+  height: 36px;
+  background: #dee2e6;
+  border: 2px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -8px;
+  font-weight: 600;
+  color: #495057;
 }
 
-.btn-complete:hover {
-  transform: scale(1.05);
-}
-
-.completed-badge {
-  color: #51cf66;
-  font-size: 1.2rem;
-}
-
+/* 任务操作 */
 .task-actions {
   display: flex;
   gap: 8px;
-  margin-top: 12px;
-  justify-content: flex-end;
 }
 
+.task-actions .btn {
+  flex: 1;
+  padding: 10px 16px;
+  font-size: 0.85rem;
+}
+
+.btn-complete {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  border: none;
+}
+
+.btn-completed {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+/* 完成动画 */
+.completion-animation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.celebration {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.celebration-icon {
+  font-size: 4rem;
+  animation: celebrate 0.5s ease-out infinite alternate;
+}
+
+.celebration-icon:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.celebration-icon:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+@keyframes celebrate {
+  from { transform: scale(1) rotate(-10deg); }
+  to { transform: scale(1.3) rotate(10deg); }
+}
+
+.completion-animation h2 {
+  color: white;
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.completion-animation p {
+  color: #38ef7d;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* 表单样式 */
 .type-selector {
   display: flex;
   gap: 12px;
@@ -969,35 +1159,36 @@ onMounted(() => {
 
 .type-btn {
   flex: 1;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #f8f9fa;
   border: 2px solid #e9ecef;
-  background: white;
-  border-radius: 10px;
+  border-radius: 16px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
-.type-btn.active {
+.type-btn:hover {
   border-color: #667eea;
-  background: #edf2ff;
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.type-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
 }
 
-.icon-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+.type-icon {
+  font-size: 1.8rem;
 }
 
 .child-selector {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .child-checkbox {
@@ -1006,126 +1197,50 @@ onMounted(() => {
   gap: 8px;
   padding: 10px 16px;
   background: #f8f9fa;
-  border-radius: 20px;
+  border: 2px solid #e9ecef;
+  border-radius: 30px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .child-checkbox:hover {
-  background: #e9ecef;
+  border-color: #667eea;
+}
+
+.child-checkbox.checked {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
 }
 
 .child-checkbox input {
-  width: auto;
+  display: none;
 }
 
-.points-info {
-  text-align: center;
-  margin-top: 16px;
-  font-size: 1.1rem;
-}
-
-.points-info .points {
-  color: #11998e;
-  font-weight: 700;
+.child-avatar {
   font-size: 1.3rem;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px;
-}
-
-.empty-icon {
-  font-size: 4rem;
-  margin-bottom: 16px;
-}
-
-/* 连续挑战样式 */
-.streak-fields {
-  background: #fff8f0;
-  padding: 16px;
-  border-radius: 12px;
-  margin-bottom: 16px;
-}
-
-.streak-fields .hint {
-  color: #ff9f43;
-  font-size: 0.85rem;
-  margin-top: 8px;
-}
-
-.streak-progress {
-  margin-top: 16px;
-  padding: 16px;
-  background: white;
-  border-radius: 12px;
-}
-
-.progress-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.progress-title {
-  font-weight: 600;
-  color: #333;
-}
-
-.progress-count {
-  background: linear-gradient(135deg, #ff9f43 0%, #ff6b6b 100%);
-  color: white;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.progress-calendar {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-}
-
-.day-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 2px solid transparent;
-  transition: all 0.3s;
-}
-
-.day-cell.completed {
-  background: #d3f9d8;
-  border-color: #51cf66;
-}
-
-.day-cell.today {
-  border-color: #ff9f43;
-  background: #fff8f0;
-}
-
-.day-number {
-  font-size: 0.75rem;
+.form-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.8rem;
   color: #868e96;
-  margin-bottom: 2px;
 }
 
-.day-status {
-  font-size: 1rem;
-}
-
-.task-card.streak {
-  border-left-color: #ff9f43;
-  background: linear-gradient(135deg, #fff8f0 0%, #fff 100%);
-}
-
-.task-card.streak .task-icon {
-  background: linear-gradient(135deg, #ff9f43 0%, #ff6b6b 100%);
+@media (max-width: 768px) {
+  .tasks-flow {
+    grid-template-columns: 1fr;
+  }
+  
+  .template-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
 }
 </style>

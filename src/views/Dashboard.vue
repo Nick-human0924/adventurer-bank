@@ -9,6 +9,73 @@
       </button>
     </div>
     
+    <!-- 快捷操作台 - 游戏化新设计 -->
+    <div class="command-center">
+      <!-- 左侧：快速加分按钮组 -->
+      <div class="quick-actions-panel">
+        <div class="panel-header">
+          <span class="panel-icon">⚡</span>
+          <span class="panel-title">快速加分</span>
+        </div>
+        <div class="quick-btns-grid">
+          <button 
+            v-for="action in quickActions" 
+            :key="action.id"
+            class="quick-action-btn"
+            :class="action.color"
+            @click="quickAddPoints(action)"
+            :disabled="!selectedChildId"
+          >
+            <span class="action-emoji">{{ action.emoji }}</span>
+            <span class="action-name">{{ action.name }}</span>
+            <span class="action-points" :class="{ 'score-pop': poppingScore === action.id }">+{{ action.points }}</span>
+          </button>
+        </div>
+        <div class="child-select-bar">
+          <label>👶 选择孩子：</label>
+          <select v-model="selectedChildId" v-if="children.length > 1">
+            <option v-for="child in children" :key="child.id" :value="child.id">
+              {{ child.avatar || '👶' }} {{ child.name }} ({{ child.current_balance }}分)
+            </option>
+          </select>
+          <span v-else-if="children.length === 1" class="single-child">
+            {{ children[0].avatar || '👶' }} {{ children[0].name }}
+          </span>
+          <span v-else class="no-child">请先添加孩子</span>
+        </div>
+      </div>
+      
+      <!-- 右侧：待办事项窗口 -->
+      <div class="todo-panel">
+        <div class="panel-header">
+          <span class="panel-icon">📋</span>
+          <span class="panel-title">待办事项</span>
+          <span class="todo-count" v-if="pendingTasks.length > 0">{{ pendingTasks.length }}</span>
+        </div>
+        <div class="todo-list">
+          <div v-if="pendingTasks.length === 0" class="todo-empty">
+            <span class="empty-emoji">🎉</span>
+            <p>太棒了！没有待办事项</p>
+          </div>
+          <div 
+            v-for="task in pendingTasks" 
+            :key="task.id"
+            class="todo-item"
+            @click="reviewTask(task)"
+          >
+            <span class="todo-icon">{{ task.icon || '📋' }}</span>
+            <div class="todo-info">
+              <span class="todo-title">{{ task.title }}</span>
+              <span class="todo-assignee">
+                {{ task.children?.map(c => c.name).join(', ') || '未分配' }}
+              </span>
+            </div>
+            <span class="todo-points">+{{ task.points }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <!-- 统计卡片 -->
     <div class="stats-grid">
       <div class="stat-card">
@@ -23,7 +90,7 @@
         <div class="stat-icon green">💰</div>
         <div class="stat-content">
           <h3>总积分发放</h3>
-          <div class="number">{{ stats.totalPointsEarned }}</div>
+          <div class="number" :class="{ 'score-scale': isScalingScore }">{{ stats.totalPointsEarned }}</div>
         </div>
       </div>
       
@@ -92,110 +159,24 @@
       </div>
     </div>
     
-    <!-- 快速记录 - 简化版 -->
-    <div class="card quick-record-card">
-      <div class="card-title">⚡ 快速记录</div>
-      <div v-if="children.length === 0" class="empty-state">
-        <p>请先添加孩子</p>
-      </div>
-      <div v-else class="quick-record">
-        <div class="selected-child" v-if="children.length === 1">
-          <span class="child-avatar">{{ children[0].avatar || '👶' }}</span>
-          <span class="child-name">{{ children[0].name }}</span>
-          <span class="child-points">{{ children[0].current_balance }}分</span>
-        </div>
-        <div v-else class="child-selector">
-          <select v-model="quickRecord.child_id">
-            <option v-for="child in children" :key="child.id" :value="child.id">
-              {{ child.name }} ({{ child.current_balance }}分)
-            </option>
-          </select>
-        </div>
-        
-        <div class="rules-grid">
-          <button 
-            v-for="rule in goodRules" 
-            :key="rule.id"
-            class="rule-btn"
-            @click="quickRecordTransaction(rule)"
-          >
-            <span class="rule-icon">{{ rule.icon || '⭐' }}</span>
-            <span class="rule-name">{{ rule.name }}</span>
-            <span class="rule-points">+{{ rule.points }}</span>
-          </button>
-        </div>
-        
-        <div v-if="recordMessage" :class="['record-message', recordMessage.type]">
-          {{ recordMessage.text }}
-        </div>
-      </div>
-    </div>
-    
-    <!-- 快速操作 -->
-    <div class="card">
-      <div class="card-title">⚡ 快速操作</div>
-      <div class="quick-actions">
-        <button class="btn btn-success" @click="showAddPoints = true">
-          ➕ 奖励积分
-        </button>
-        <button class="btn btn-danger" @click="showDeductPoints = true">
-          ➖ 扣除积分
-        </button>
-        <button class="btn btn-primary" @click="refreshData">
-          🔄 刷新数据
-        </button>
-      </div>
-    </div>
-    
-    <!-- 添加积分弹窗 -->
-    <div v-if="showAddPoints" class="modal-overlay" @click.self="showAddPoints = false">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">➕ 奖励积分</span>
-          <button class="close-btn" @click="showAddPoints = false">&times;</button>
-        </div>
-        
-        <div class="form-group">
-          <label>选择孩子</label>
-          <select v-model="newTransaction.child_id">
-            <option v-for="child in children" :key="child.id" :value="child.id">
-              {{ child.name }}
-            </option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label>选择规则</label>
-          <select v-model="newTransaction.rule_id">
-            <option v-for="rule in goodRules" :key="rule.id" :value="rule.id">
-              {{ rule.name }} (+{{ rule.points }}分)
-            </option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label>备注（可选）</label>
-          <input v-model="newTransaction.note" placeholder="输入备注..." />
-        </div>
-        
-        <button class="btn btn-success" @click="addTransaction('earn')">
-          确认奖励
-        </button>
-      </div>
+    <!-- 消息提示 -->
+    <div v-if="recordMessage" :class="['record-toast', recordMessage.type]">
+      <span class="toast-icon">{{ recordMessage.type === 'success' ? '✅' : '❌' }}</span>
+      <span class="toast-text">{{ recordMessage.text }}</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, reactive } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, reactive, computed } from 'vue'
 import * as echarts from 'echarts'
 import { supabase, subscribeToTable } from '../utils/supabase.js'
 
 const trendChart = ref(null)
 const pieChart = ref(null)
-const showAddPoints = ref(false)
-const showDeductPoints = ref(false)
 const isRefreshing = ref(false)
+const isScalingScore = ref(false)
+const poppingScore = ref(null)
 
 const stats = reactive({
   totalChildren: 0,
@@ -207,17 +188,24 @@ const stats = reactive({
 const children = ref([])
 const goodRules = ref([])
 const recentTransactions = ref([])
-const newTransaction = reactive({
-  child_id: '',
-  rule_id: '',
-  note: ''
-})
-
-// 快速记录数据
-const quickRecord = reactive({
-  child_id: ''
-})
+const tasks = ref([])
+const selectedChildId = ref('')
 const recordMessage = ref(null)
+
+// 快速加分操作
+const quickActions = [
+  { id: 'wake_up', name: '按时起床', emoji: '🌅', points: 5, color: 'sunrise' },
+  { id: 'homework', name: '完成作业', emoji: '📝', points: 10, color: 'ocean' },
+  { id: 'reading', name: '阅读时光', emoji: '📚', points: 8, color: 'purple' },
+  { id: 'housework', name: '做家务', emoji: '🧹', points: 6, color: 'leaf' },
+  { id: 'exercise', name: '运动锻炼', emoji: '⚽', points: 7, color: 'fire' },
+  { id: 'kindness', name: '帮助他人', emoji: '💝', points: 5, color: 'love' }
+]
+
+// 待办任务（未完成的任务）
+const pendingTasks = computed(() => {
+  return tasks.value.filter(t => t.status !== 'completed').slice(0, 5)
+})
 
 let trendChartInstance = null
 let pieChartInstance = null
@@ -258,6 +246,11 @@ async function loadStats() {
 async function loadChildren() {
   const { data } = await supabase.from('children').select('*').order('name')
   children.value = data || []
+  
+  // 自动选择第一个孩子
+  if (children.value.length > 0 && !selectedChildId.value) {
+    selectedChildId.value = children.value[0].id
+  }
 }
 
 // 加载规则
@@ -288,6 +281,75 @@ async function loadTransactions() {
     child_name: t.children?.name,
     rule_name: t.rules?.name
   }))
+}
+
+// 加载任务
+async function loadTasks() {
+  const { data: tasksData } = await supabase
+    .from('tasks')
+    .select('*')
+    .neq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(10)
+  
+  // 获取任务分配的孩子
+  const tasksWithChildren = await Promise.all(
+    (tasksData || []).map(async (task) => {
+      const { data: assignments } = await supabase
+        .from('task_assignments')
+        .select('child_id, children(name, avatar)')
+        .eq('task_id', task.id)
+      
+      return {
+        ...task,
+        children: assignments?.map(a => ({
+          id: a.child_id,
+          name: a.children?.name,
+          avatar: a.children?.avatar
+        })) || []
+      }
+    })
+  )
+  
+  tasks.value = tasksWithChildren
+}
+
+// 快速加分
+async function quickAddPoints(action) {
+  if (!selectedChildId.value) {
+    recordMessage.value = { type: 'error', text: '请先选择孩子' }
+    setTimeout(() => recordMessage.value = null, 3000)
+    return
+  }
+
+  // 动画效果
+  poppingScore.value = action.id
+  setTimeout(() => poppingScore.value = null, 300)
+  isScalingScore.value = true
+  setTimeout(() => isScalingScore.value = false, 300)
+
+  const child = children.value.find(c => c.id === selectedChildId.value)
+  
+  // 创建交易记录
+  const { error } = await supabase.from('transactions').insert({
+    child_id: selectedChildId.value,
+    points: action.points,
+    type: 'earn',
+    note: action.name,
+    rule_id: null
+  })
+
+  if (error) {
+    recordMessage.value = { type: 'error', text: '记录失败: ' + error.message }
+  } else {
+    recordMessage.value = { 
+      type: 'success', 
+      text: `✨ ${child?.name} ${action.name} +${action.points}分！`
+    }
+    await refreshData()
+  }
+  
+  setTimeout(() => recordMessage.value = null, 3000)
 }
 
 // 初始化趋势图
@@ -384,66 +446,6 @@ function initPieChart() {
   pieChartInstance.setOption(option)
 }
 
-// 添加交易
-async function addTransaction(type) {
-  const rule = goodRules.value.find(r => r.id === newTransaction.rule_id)
-  if (!rule) return
-
-  const { error } = await supabase.from('transactions').insert({
-    child_id: newTransaction.child_id,
-    rule_id: newTransaction.rule_id,
-    points: rule.points,
-    type,
-    note: newTransaction.note
-  })
-
-  if (!error) {
-    showAddPoints.value = false
-    newTransaction.child_id = ''
-    newTransaction.rule_id = ''
-    newTransaction.note = ''
-    await refreshData()
-  }
-}
-
-// 快速记录功能
-async function quickRecordTransaction(rule) {
-  const childId = children.value.length === 1 
-    ? children.value[0].id 
-    : quickRecord.child_id
-  
-  if (!childId) {
-    recordMessage.value = { type: 'error', text: '请先选择孩子' }
-    setTimeout(() => recordMessage.value = null, 3000)
-    return
-  }
-
-  const { error } = await supabase.from('transactions').insert({
-    child_id: childId,
-    rule_id: rule.id,
-    points: rule.points,
-    type: 'earn',
-    note: ''
-  })
-
-  if (error) {
-    recordMessage.value = { type: 'error', text: '记录失败: ' + error.message }
-  } else {
-    const child = children.value.find(c => c.id === childId)
-    recordMessage.value = { 
-      type: 'success', 
-      text: `✅ 已记录！${child?.name || ''} ${rule.name} +${rule.points}分`
-    }
-    await refreshData()
-    // 更新快速记录中的孩子ID（如果是多孩子）
-    if (children.value.length > 1) {
-      quickRecord.child_id = childId
-    }
-  }
-  
-  setTimeout(() => recordMessage.value = null, 3000)
-}
-
 // 刷新数据
 async function refreshData() {
   isRefreshing.value = true
@@ -452,7 +454,8 @@ async function refreshData() {
       loadStats(),
       loadChildren(),
       loadRules(),
-      loadTransactions()
+      loadTransactions(),
+      loadTasks()
     ])
     console.log('✅ 数据刷新完成')
   } catch (error) {
@@ -487,7 +490,7 @@ onMounted(async () => {
       console.log('🔄 收到transactions更新:', payload)
       loadTransactions()
       loadStats()
-      loadChildren() // 刷新孩子积分
+      loadChildren()
     })
   )
   
@@ -499,24 +502,12 @@ onMounted(async () => {
     })
   )
   
-  // 定时轮询（每10秒刷新一次，作为备份）
-  const pollInterval = setInterval(() => {
-    console.log('⏰ 定时刷新数据')
-    refreshData()
-  }, 10000)
-  
-  // 页面可见性变化时刷新
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      console.log('👁️ 页面可见，刷新数据')
-      refreshData()
-    }
-  })
-  
-  // 保存interval用于清理
-  subscriptions.push({
-    unsubscribe: () => clearInterval(pollInterval)
-  })
+  subscriptions.push(
+    subscribeToTable('tasks', (payload) => {
+      console.log('🔄 收到tasks更新:', payload)
+      loadTasks()
+    })
+  )
 })
 
 onUnmounted(() => {
@@ -541,22 +532,25 @@ onUnmounted(() => {
 .page-title {
   margin: 0;
   color: #333;
+  font-size: 1.8rem;
 }
 
 .refresh-btn {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #11998e, #38ef7d);
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 1rem;
   transition: all 0.3s;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 }
 
 .refresh-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .refresh-btn:disabled {
@@ -564,6 +558,336 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+/* 快捷操作台 - Grid布局 */
+.command-center {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+  .command-center {
+    grid-template-columns: 1fr;
+  }
+}
+
+.quick-actions-panel, .todo-panel {
+  background: white;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.panel-icon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #333;
+  flex: 1;
+}
+
+.todo-count {
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* 快速加分按钮网格 */
+.quick-btns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.quick-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 8px;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  gap: 8px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.quick-action-btn:hover:not(:disabled) {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+.quick-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 颜色主题 */
+.quick-action-btn.sunrise {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.quick-action-btn.ocean {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.quick-action-btn.purple {
+  background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+}
+
+.quick-action-btn.leaf {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.quick-action-btn.fire {
+  background: linear-gradient(135deg, #fa709a 0%, #ff6b6b 100%);
+}
+
+.quick-action-btn.love {
+  background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+}
+
+.action-emoji {
+  font-size: 2rem;
+}
+
+.action-name {
+  font-size: 0.85rem;
+  color: white;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.action-points {
+  font-size: 1.1rem;
+  color: white;
+  font-weight: 700;
+  background: rgba(255,255,255,0.3);
+  padding: 4px 12px;
+  border-radius: 20px;
+  transition: transform 0.15s;
+}
+
+/* 分数弹动动画 */
+.score-pop {
+  animation: scorePop 0.3s ease-out;
+}
+
+@keyframes scorePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+.score-scale {
+  animation: scoreScale 0.3s ease-out;
+}
+
+@keyframes scoreScale {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* 孩子选择栏 */
+.child-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.child-select-bar label {
+  font-weight: 600;
+  color: #495057;
+}
+
+.child-select-bar select {
+  flex: 1;
+  padding: 10px 16px;
+  border: 2px solid #dee2e6;
+  border-radius: 10px;
+  font-size: 1rem;
+  background: white;
+  cursor: pointer;
+}
+
+.child-select-bar select:focus {
+  border-color: #667eea;
+  outline: none;
+}
+
+.single-child {
+  flex: 1;
+  font-weight: 600;
+  color: #333;
+  padding: 10px 16px;
+  background: #e7f3ff;
+  border-radius: 10px;
+}
+
+.no-child {
+  flex: 1;
+  color: #868e96;
+}
+
+/* 待办事项列表 */
+.todo-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.todo-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #868e96;
+}
+
+.empty-emoji {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.todo-item:hover {
+  background: #e7f3ff;
+  transform: translateX(4px);
+}
+
+.todo-icon {
+  font-size: 1.5rem;
+  width: 44px;
+  height: 44px;
+  background: white;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.todo-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.todo-title {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.todo-assignee {
+  font-size: 0.85rem;
+  color: #868e96;
+}
+
+.todo-points {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* 消息提示 */
+.record-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px;
+  border-radius: 12px;
+  font-weight: 600;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  animation: slideUp 0.3s ease-out;
+  z-index: 9999;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.record-toast.success {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+}
+
+.record-toast.error {
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  color: white;
+}
+
+.toast-icon {
+  font-size: 1.3rem;
+}
+
+/* 图表区域 */
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
@@ -573,121 +897,5 @@ onUnmounted(() => {
 
 .chart {
   height: 300px;
-}
-
-.quick-actions {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
-}
-
-.quick-record-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.quick-record-card .card-title {
-  color: white;
-}
-
-.quick-record {
-  padding: 10px 0;
-}
-
-.selected-child {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 15px;
-  background: rgba(255,255,255,0.2);
-  border-radius: 12px;
-}
-
-.child-avatar {
-  font-size: 2rem;
-}
-
-.child-name {
-  font-size: 1.3rem;
-  font-weight: 600;
-  flex: 1;
-}
-
-.child-points {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #ffd43b;
-}
-
-.child-selector {
-  margin-bottom: 20px;
-}
-
-.child-selector select {
-  width: 100%;
-  padding: 12px;
-  border-radius: 8px;
-  border: none;
-  font-size: 1rem;
-}
-
-.rules-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.rule-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 15px 10px;
-  border: none;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.95);
-  cursor: pointer;
-  transition: all 0.3s;
-  gap: 6px;
-}
-
-.rule-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-  background: white;
-}
-
-.rule-icon {
-  font-size: 1.8rem;
-}
-
-.rule-name {
-  font-size: 0.9rem;
-  color: #333;
-  font-weight: 500;
-}
-
-.rule-points {
-  font-size: 1.1rem;
-  color: #11998e;
-  font-weight: 700;
-}
-
-.record-message {
-  margin-top: 15px;
-  padding: 12px;
-  border-radius: 8px;
-  text-align: center;
-  font-weight: 500;
-}
-
-.record-message.success {
-  background: #d3f9d8;
-  color: #2b8a3e;
-}
-
-.record-message.error {
-  background: #ffe3e3;
-  color: #c92a2a;
 }
 </style>
