@@ -29,10 +29,20 @@
       </div>
     </div>
     
-    <!-- 添加规则按钮 -->
+    <!-- 分类筛选 -->
     <div class="card">
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-title" style="margin: 0;">规则列表</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <div class="category-filters">
+          <span class="filter-label">分类筛选：</span>
+          <button 
+            v-for="cat in categories" 
+            :key="cat.value"
+            :class="['filter-btn', { active: selectedCategory === cat.value }]"
+            @click="selectedCategory = cat.value"
+          >
+            {{ cat.icon }} {{ cat.label }}
+          </button>
+        </div>
         <button class="btn btn-primary" @click="showAddModal = true">
           ➕ 新建规则
         </button>
@@ -48,16 +58,18 @@
             <tr>
               <th>图标</th>
               <th>规则名称</th>
+              <th>分类</th>
               <th>描述</th>
-              <th>积分</th>
+              <th>金币</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="rule in goodRules" :key="rule.id">
+            <tr v-for="rule in filteredGoodRules" :key="rule.id">
               <td class="icon-cell">{{ rule.icon }}</td>
               <td>{{ rule.name }}</td>
+              <td><span class="category-tag" :class="rule.category">{{ getCategoryLabel(rule.category) }}</span></td>
               <td>{{ rule.description }}</td>
               <td><span class="points-badge good">+{{ rule.points }}</span></td>
               <td>
@@ -87,16 +99,18 @@
             <tr>
               <th>图标</th>
               <th>规则名称</th>
+              <th>分类</th>
               <th>描述</th>
-              <th>积分</th>
+              <th>金币</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="rule in badRules" :key="rule.id">
+            <tr v-for="rule in filteredBadRules" :key="rule.id">
               <td class="icon-cell">{{ rule.icon }}</td>
               <td>{{ rule.name }}</td>
+              <td><span class="category-tag" :class="rule.category">{{ getCategoryLabel(rule.category) }}</span></td>
               <td>{{ rule.description }}</td>
               <td><span class="points-badge bad">-{{ rule.points }}</span></td>
               <td>
@@ -128,8 +142,17 @@
         <div class="form-group">
           <label>规则类型</label>
           <select v-model="form.type">
-            <option value="good">✅ 奖励规则（获得积分）</option>
-            <option value="bad">⚠️ 惩罚规则（扣除积分）</option>
+            <option value="good">✅ 奖励规则（获得金币）</option>
+            <option value="bad">⚠️ 惩罚规则（扣除金币）</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>分类</label>
+          <select v-model="form.category">
+            <option v-for="cat in categories" :key="cat.value" :value="cat.value">
+              {{ cat.icon }} {{ cat.label }}
+            </option>
           </select>
         </div>
         
@@ -158,8 +181,8 @@
         </div>
         
         <div class="form-group">
-          <label>积分值 *</label>
-          <input type="number" v-model.number="form.points" min="1" placeholder="输入积分数值" />
+          <label>金币值 *</label>
+          <input type="number" v-model.number="form.points" min="1" placeholder="输入金币数值" />
         </div>
         
         <div style="display: flex; gap: 10px;">
@@ -180,11 +203,22 @@ import { supabase } from '../utils/supabase.js'
 const rules = ref([])
 const showAddModal = ref(false)
 const editingRule = ref(null)
+const selectedCategory = ref('all')
 
-const iconOptions = ['⭐', '📚', '🏃', '🧹', '🎨', '🎵', '🤝', '💤', '🍎', '🎯', '🏆', '💪', '🧠', '❤️', '🌟']
+// 分类定义
+const categories = [
+  { value: 'all', label: '全部', icon: '📋' },
+  { value: 'sports', label: '运动类', icon: '🏃' },
+  { value: 'study', label: '学习类', icon: '📚' },
+  { value: 'attitude', label: '态度和品德', icon: '❤️' },
+  { value: 'improvement', label: '控制和改正', icon: '🔧' }
+]
+
+const iconOptions = ['⭐', '📚', '🏃', '🧹', '🎨', '🎵', '🤝', '💤', '🍎', '🎯', '🏆', '💪', '🧠', '❤️', '🌟', '⚽', '🎹', '📖', '✏️', '🧩', '🎮', '🚫', '⚠️', '🔔']
 
 const form = ref({
   type: 'good',
+  category: 'study',
   name: '',
   icon: '⭐',
   description: '',
@@ -196,6 +230,23 @@ const goodRules = computed(() => rules.value.filter(r => r.type === 'good'))
 const badRules = computed(() => rules.value.filter(r => r.type === 'bad'))
 const goodRulesCount = computed(() => goodRules.value.length)
 const badRulesCount = computed(() => badRules.value.length)
+
+// 筛选后的规则
+const filteredGoodRules = computed(() => {
+  if (selectedCategory.value === 'all') return goodRules.value
+  return goodRules.value.filter(r => r.category === selectedCategory.value)
+})
+
+const filteredBadRules = computed(() => {
+  if (selectedCategory.value === 'all') return badRules.value
+  return badRules.value.filter(r => r.category === selectedCategory.value)
+})
+
+// 获取分类标签
+function getCategoryLabel(category) {
+  const cat = categories.find(c => c.value === category)
+  return cat ? cat.label : category
+}
 
 // 加载规则
 async function loadRules() {
@@ -219,7 +270,8 @@ async function saveRule() {
     icon: form.value.icon,
     description: form.value.description,
     points: form.value.points,
-    is_active: form.value.is_active
+    is_active: form.value.is_active,
+    category: form.value.category
   }
 
   if (editingRule.value) {
@@ -237,6 +289,7 @@ function editRule(rule) {
   editingRule.value = rule
   form.value = {
     type: rule.type,
+    category: rule.category || 'study',
     name: rule.name,
     icon: rule.icon,
     description: rule.description,
@@ -268,6 +321,7 @@ function closeModal() {
   editingRule.value = null
   form.value = {
     type: 'good',
+    category: 'study',
     name: '',
     icon: '⭐',
     description: '',
@@ -285,6 +339,69 @@ onMounted(() => {
 .page-title {
   margin-bottom: 24px;
   color: #333;
+}
+
+/* 分类筛选 */
+.category-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-label {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.filter-btn {
+  padding: 8px 14px;
+  border: 2px solid #e9ecef;
+  background: white;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+}
+
+.filter-btn:hover {
+  border-color: #667eea;
+}
+
+.filter-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+}
+
+/* 分类标签 */
+.category-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.category-tag.sports {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.category-tag.study {
+  background: #dbe4ff;
+  color: #364fc7;
+}
+
+.category-tag.attitude {
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+.category-tag.improvement {
+  background: #fff3bf;
+  color: #e67700;
 }
 
 .icon-cell {

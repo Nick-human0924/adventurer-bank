@@ -2,7 +2,7 @@
   <div class="dashboard">
     <!-- 页面标题和刷新按钮 -->
     <div class="page-header">
-      <h2 class="page-title">📊 仪表盘</h2>
+      <h2 class="page-title">🏦 {{ bankTitle }}</h2>
       <button class="refresh-btn" @click="refreshData" :disabled="isRefreshing">
         <span v-if="isRefreshing">🔄 刷新中...</span>
         <span v-else>🔄 刷新</span>
@@ -35,7 +35,7 @@
           <label>👶 选择孩子：</label>
           <select v-model="selectedChildId" v-if="children.length > 1">
             <option v-for="child in children" :key="child.id" :value="child.id">
-              {{ child.avatar || '👶' }} {{ child.name }} ({{ child.current_balance }}分)
+              {{ child.avatar || '👶' }} {{ child.name }} ({{ child.current_balance }}金币)
             </option>
           </select>
           <span v-else-if="children.length === 1" class="single-child">
@@ -96,7 +96,7 @@
       <div class="stat-card">
         <div class="stat-icon green">💰</div>
         <div class="stat-content">
-          <h3>总积分发放</h3>
+          <h3>总金币发放</h3>
           <div class="number" :class="{ 'score-scale': isScalingScore }">{{ stats.totalPointsEarned }}</div>
         </div>
       </div>
@@ -121,7 +121,7 @@
     <!-- 图表区域 -->
     <div class="charts-grid">
       <div class="card">
-        <div class="card-title">📈 积分趋势（近7天）</div>
+        <div class="card-title">📈 金币趋势（近7天）</div>
         <div ref="trendChart" class="chart"></div>
       </div>
       
@@ -131,9 +131,9 @@
       </div>
     </div>
     
-    <!-- 最近交易记录 -->
+    <!-- 最近行为记录 -->
     <div class="card">
-      <div class="card-title">📝 最近交易记录</div>
+      <div class="card-title">📝 最近行为记录</div>
       <div class="table-container">
         <table>
           <thead>
@@ -141,7 +141,7 @@
               <th>时间</th>
               <th>孩子</th>
               <th>行为</th>
-              <th>积分</th>
+              <th>金币</th>
               <th>类型</th>
               <th>备注</th>
             </tr>
@@ -229,9 +229,12 @@ import { supabase, subscribeToTable } from '../utils/supabase.js'
 
 const trendChart = ref(null)
 const pieChart = ref(null)
+let trendChartInstance = null
+let pieChartInstance = null
 const isRefreshing = ref(false)
 const isScalingScore = ref(false)
 const poppingScore = ref(null)
+const userName = ref('')
 
 const stats = reactive({
   totalChildren: 0,
@@ -246,6 +249,16 @@ const recentTransactions = ref([])
 const tasks = ref([])
 const selectedChildId = ref('')
 const recordMessage = ref(null)
+
+// 银行标题
+const bankTitle = computed(() => {
+  if (children.value.length === 1) {
+    return `${children.value[0].name}的行为银行`
+  } else if (children.value.length > 1) {
+    return `${userName.value || '我'}的行为银行`
+  }
+  return '行为银行'
+})
 
 // 新增行为弹窗状态
 const showAddBehaviorModal = ref(false)
@@ -290,7 +303,7 @@ async function loadStats() {
     .select('*', { count: 'exact', head: true })
   stats.totalChildren = childCount || 0
 
-  // 总积分发放
+  // 总金币发放
   const { data: earnedData } = await supabase
     .from('transactions')
     .select('points')
@@ -321,6 +334,14 @@ async function loadChildren() {
   // 自动选择第一个孩子
   if (children.value.length > 0 && !selectedChildId.value) {
     selectedChildId.value = children.value[0].id
+  }
+  
+  // 获取用户信息（用于多孩子时的标题）
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user?.user_metadata?.name) {
+    userName.value = user.user_metadata.name
+  } else if (user?.email) {
+    userName.value = user.email.split('@')[0]
   }
 }
 
@@ -521,7 +542,7 @@ async function initTrendChart() {
     const dateStr = d.toISOString().split('T')[0]
     dates.push(d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }))
     
-    // 查询当天的获得积分
+    // 查询当天的获得金币
     const { data: earnedData } = await supabase
       .from('transactions')
       .select('points')
@@ -530,7 +551,7 @@ async function initTrendChart() {
       .gte('created_at', dateStr)
       .lt('created_at', dateStr + 'T23:59:59')
     
-    // 查询当天的消费积分
+    // 查询当天的消费金币
     const { data: spentData } = await supabase
       .from('transactions')
       .select('points')
@@ -563,13 +584,13 @@ async function initTrendChart() {
   
   const option = {
     tooltip: { trigger: 'axis' },
-    legend: { data: ['获得积分', '消费积分'] },
+    legend: { data: ['获得金币', '消费金币'] },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'category', boundaryGap: false, data: dates },
     yAxis: { type: 'value' },
     series: [
       {
-        name: '获得积分',
+        name: '获得金币',
         type: 'line',
         smooth: true,
         data: earned,
@@ -582,7 +603,7 @@ async function initTrendChart() {
         itemStyle: { color: '#11998e' }
       },
       {
-        name: '消费积分',
+        name: '消费金币',
         type: 'line',
         smooth: true,
         data: spent,

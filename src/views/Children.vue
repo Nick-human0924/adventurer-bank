@@ -32,17 +32,17 @@
           <div class="hero-title">{{ getTitle(child.total_points) }}</div>
         </div>
         
-        <!-- 积分与进度 -->
+        <!-- 金币与进度 -->
         <div class="hero-stats">
           <div class="stat-row">
             <div class="stat-item">
-              <span class="stat-label">💎 当前积分</span>
+              <span class="stat-label">💎 当前金币</span>
               <span class="stat-value current" :class="{ 'score-bounce': bouncingChild === child.id }">
                 {{ child.current_balance }}
               </span>
             </div>
             <div class="stat-item">
-              <span class="stat-label">⭐ 累计积分</span>
+              <span class="stat-label">⭐ 累计金币</span>
               <span class="stat-value total">{{ child.total_points }}</span>
             </div>
           </div>
@@ -189,7 +189,7 @@
           </div>
           
           <div class="form-group">
-            <label>💎 初始积分</label>
+            <label>💎 初始金币</label>
             <input v-model.number="form.current_balance" type="number" min="0" />
           </div>
         </div>
@@ -271,11 +271,11 @@ const levels = [
 
 // 徽章配置
 const allBadges = [
-  { id: 'first_step', name: '初出茅庐', emoji: '👣', description: '获得第一分积分', requirement: 1 },
-  { id: 'collector', name: '积分收集者', emoji: '💰', description: '累计获得50分', requirement: 50 },
+  { id: 'first_step', name: '初出茅庐', emoji: '👣', description: '获得第一分金币', requirement: 1 },
+  { id: 'collector', name: '金币收集者', emoji: '💰', description: '累计获得50分', requirement: 50 },
   { id: 'hundred', name: '百分达人', emoji: '💯', description: '累计获得100分', requirement: 100 },
   { id: 'streak_7', name: '周周坚持', emoji: '🔥', description: '连续7天有记录', requirement: 200 },
-  { id: 'collector_500', name: '积分大师', emoji: '👑', description: '累计获得500分', requirement: 500 },
+  { id: 'collector_500', name: '金币大师', emoji: '👑', description: '累计获得500分', requirement: 500 },
   { id: 'champion', name: '冠军之星', emoji: '🏆', description: '累计获得1000分', requirement: 1000 },
   { id: 'legend', name: '传说人物', emoji: '⭐', description: '累计获得2000分', requirement: 2000 },
   { id: 'master', name: '行为大师', emoji: '🎖️', description: '累计获得3000分', requirement: 3000 }

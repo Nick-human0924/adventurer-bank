@@ -376,7 +376,7 @@
           
           <!-- 奖励设置 -->
           <div class="form-group">
-            <label>完成奖励积分 *</label>
+            <label>完成奖励金币 *</label>
             <div class="number-input">
               <button type="button" @click="taskForm.reward_points = Math.max(0, taskForm.reward_points - 5)">-</button>
               <input 
@@ -387,7 +387,7 @@
                 required
               >
               <button type="button" @click="taskForm.reward_points = taskForm.reward_points + 5">+</button>
-              <span class="unit">积分</span>
+              <span class="unit">金币</span>
             </div>
           </div>
           
@@ -552,7 +552,7 @@
             <h4>🎁 完成奖励</h4>            
             <div class="reward-display">
               <span class="reward-amount">{{ selectedTask.reward_points || selectedTask.points || 0 }}</span>
-              <span class="reward-unit">积分</span>            </div>
+              <span class="reward-unit">金币</span>            </div>
             
             <div v-if="selectedTask.progress?.reward_claimed" class="claimed-info">
               ✅ 已于 {{ formatDate(selectedTask.progress.reward_claimed_at) }} 领取
@@ -973,7 +973,7 @@ async function claimReward(task) {
     const result = JSON.parse(data)
     
     if (result.success) {
-      alert(`🎉 ${result.message}！获得 ${result.points_awarded} 积分`)
+      alert(`🎉 ${result.message}！获得 ${result.points_awarded} 金币`)
       await loadTasks()
     } else {
       alert(result.message)

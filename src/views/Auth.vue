@@ -4,7 +4,7 @@
       <div class="auth-logo">
         <span class="logo-icon">🏦</span>
         <h1>儿童行为银行</h1>
-        <p>培养孩子好习惯，从积分激励开始</p>
+        <p>培养孩子好习惯，从金币激励开始</p>
       </div>
       
       <div class="auth-tabs">
