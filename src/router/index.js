@@ -6,6 +6,7 @@ import Rules from '../views/Rules.vue'
 import Tasks from '../views/Tasks.vue'
 import Config from '../views/Config.vue'
 import Auth from '../views/Auth.vue'
+import Mall from '../views/Mall.vue'
 
 const routes = [
   {
@@ -37,6 +38,12 @@ const routes = [
     name: 'Tasks',
     component: Tasks,
     meta: { title: '任务闯关', icon: '🎯', requiresAuth: true }
+  },
+  {
+    path: '/mall',
+    name: 'Mall',
+    component: Mall,
+    meta: { title: '兑换商城', icon: '🎁', requiresAuth: true }
   },
   {
     path: '/config',
