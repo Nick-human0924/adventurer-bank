@@ -730,9 +730,13 @@ async function loadTasks() {
     
     if (error) throw error
     
+    console.log('🔄 加载任务:', tasksData?.length || 0, '个')
+    
     // 获取每个任务的进度
     const tasksWithProgress = await Promise.all(
       (tasksData || []).map(async (task) => {
+        console.log(`  - ${task.title}: ${task.task_type}, linkedIds:`, task.linked_rule_ids)
+        
         // 获取任务进度（带 user_id 过滤）
         const { data: progress } = await supabase
           .from('task_progress')
@@ -746,12 +750,19 @@ async function loadTasks() {
         let todayCompletions = {}
         
         if (task.linked_rule_ids?.length > 0) {
-          const { data: rules } = await supabase
+          console.log(`    查询 ${task.linked_rule_ids.length} 个规则...`)
+          const { data: rules, error: rulesError } = await supabase
             .from('rules')
             .select('*')
             .in('id', task.linked_rule_ids)
             .eq('user_id', user.id)
-          linkedRules = rules || []
+          
+          if (rulesError) {
+            console.error('    查询规则失败:', rulesError)
+          } else {
+            linkedRules = rules || []
+            console.log(`    找到 ${linkedRules.length} 个规则`)
+          }
           
           // 查询今日每个规则的完成状态
           if (progress) {
