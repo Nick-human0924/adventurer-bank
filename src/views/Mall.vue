@@ -308,7 +308,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { supabase } from '../utils/supabase.js'
 
 // 数据
@@ -318,6 +318,9 @@ const orders = ref([])
 const loading = ref(false)
 const selectedChildId = ref('')
 const exchanging = ref(false)
+
+// 实时订阅
+let subscriptions = []
 
 // 弹窗状态
 const showAddPrizeModal = ref(false)
@@ -347,11 +350,21 @@ const selectedChild = computed(() => {
 
 // 加载孩子列表
 async function loadChildren() {
-  const { data } = await supabase.from('children').select('*').order('name')
+  console.log('🔄 Mall: 开始加载孩子列表...')
+  const { data, error } = await supabase.from('children').select('*').order('name')
+  if (error) {
+    console.error('❌ Mall: 加载孩子失败:', error)
+    return
+  }
   children.value = data || []
+  console.log('✅ Mall: 加载到', children.value.length, '个孩子')
+  children.value.forEach(c => {
+    console.log(`  - ${c.name}: ${c.current_balance}金币, ${c.gem_balance || 0}宝石`)
+  })
   
   if (children.value.length > 0 && !selectedChildId.value) {
     selectedChildId.value = children.value[0].id
+    console.log('🎯 Mall: 自动选中第一个孩子:', children.value[0].name)
   }
 }
 
@@ -684,7 +697,43 @@ onMounted(() => {
   if (selectedChildId.value) {
     loadOrders()
   }
+  
+  // 设置实时订阅
+  const childrenChannel = supabase
+    .channel('mall-children-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'children' }, (payload) => {
+      console.log('🔄 孩子数据变化:', payload)
+      loadChildren()
+    })
+    .subscribe()
+  
+  subscriptions.push(childrenChannel)
+  
+  // 页面可见性变化时刷新数据
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
+
+onUnmounted(() => {
+  // 清理订阅
+  subscriptions.forEach(channel => {
+    if (channel && typeof channel.unsubscribe === 'function') {
+      channel.unsubscribe()
+    }
+  })
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
+
+// 页面可见性变化处理
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    console.log('👁️ 页面重新可见，刷新数据')
+    loadChildren()
+    loadPrizes()
+    if (selectedChildId.value) {
+      loadOrders()
+    }
+  }
+}
 </script>
 
 <style scoped>
