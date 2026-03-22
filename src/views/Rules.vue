@@ -250,9 +250,13 @@ function getCategoryLabel(category) {
 
 // 加载规则
 async function loadRules() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  
   const { data } = await supabase
     .from('rules')
     .select('*')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
   rules.value = data || []
 }
@@ -264,6 +268,12 @@ async function saveRule() {
     return
   }
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    alert('请先登录')
+    return
+  }
+
   const ruleData = {
     type: form.value.type,
     name: form.value.name,
@@ -271,7 +281,8 @@ async function saveRule() {
     description: form.value.description,
     points: form.value.points,
     is_active: form.value.is_active,
-    category: form.value.category
+    category: form.value.category,
+    user_id: user.id
   }
 
   if (editingRule.value) {
