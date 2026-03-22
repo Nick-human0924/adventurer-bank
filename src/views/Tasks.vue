@@ -96,19 +96,35 @@
               v-for="child in task.children" 
               :key="child.id"
               :class="['assignee', { 
-                completed: task.type === 'streak' ? isTodayCompleted(task, child.id) : child.completed 
+                completed: child.completed 
               }]"
             >
               <span class="avatar">{{ child.avatar || '👶' }}</span>
               <span class="name">{{ child.name }}</span>
-              <button 
-                v-if="task.type === 'streak' ? !isTodayCompleted(task, child.id) : !child.completed"
-                class="btn-complete"
-                @click="completeTask(task, child)"
-              >
-                {{ task.type === 'streak' ? '打卡' : '完成' }}
-              </button>
-              <span v-else class="completed-badge">{{ task.type === 'streak' ? '今日已打卡 ✅' : '✅' }}</span>
+              
+              <!-- 连续挑战 -->
+              <template v-if="task.type === 'streak'">
+                <button 
+                  v-if="!isTodayCompleted(task, child.id)"
+                  class="btn-complete"
+                  @click="completeTask(task, child)"
+                >
+                  打卡
+                </button>
+                <span v-else class="completed-badge">今日已打卡 ✅</span>
+              </template>
+              
+              <!-- 普通/挑战任务 -->
+              <template v-else>
+                <button 
+                  v-if="!child.completed"
+                  class="btn-complete"
+                  @click="completeTask(task, child)"
+                >
+                  完成
+                </button>
+                <span v-else class="completed-badge">✅</span>
+              </template>
             </div>
           </div>
 
