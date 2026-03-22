@@ -241,6 +241,10 @@
           <button class="btn btn-edit" @click.stop="editTask(task)">
             ✏️ 编辑
           </button>
+          
+          <button class="btn btn-delete" @click.stop="deleteTask(task)">
+            🗑️ 删除
+          </button>
         </div>
       </div>
     </div>
@@ -690,6 +694,9 @@ async function loadTasks() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
     
+    // 获取今天日期
+    const today = new Date().toISOString().split('T')[0]
+    
     // 获取任务列表（带 user_id 过滤）
     const { data: tasksData, error } = await supabase
       .from('tasks')
@@ -712,19 +719,42 @@ async function loadTasks() {
         
         // 如果是组合任务，获取关联的规则详情
         let linkedRules = []
-        if (task.task_type === 'combo' && task.linked_rule_ids?.length > 0) {
+        let todayCompletions = {}
+        
+        if (task.linked_rule_ids?.length > 0) {
           const { data: rules } = await supabase
             .from('rules')
             .select('*')
             .in('id', task.linked_rule_ids)
             .eq('user_id', user.id)
           linkedRules = rules || []
+          
+          // 查询今日每个规则的完成状态
+          if (progress) {
+            for (const childId of task.child_ids || []) {
+              const { data: txData } = await supabase
+                .from('transactions')
+                .select('rule_id')
+                .eq('user_id', user.id)
+                .eq('child_id', childId)
+                .eq('type', 'earn')
+                .gte('created_at', today)
+                .lt('created_at', today + 'T23:59:59')
+              
+              for (const tx of (txData || [])) {
+                if (tx.rule_id) {
+                  todayCompletions[tx.rule_id] = true
+                }
+              }
+            }
+          }
         }
         
         return {
           ...task,
           progress: progress || null,
-          linkedRules
+          linkedRules,
+          todayCompletions
         }
       })
     )
@@ -946,6 +976,47 @@ async function claimReward(task) {
   }
 }
 
+// 删除任务
+async function deleteTask(task) {
+  if (!confirm(`确定要删除任务"${task.title}"吗？\n此操作不可恢复！`)) {
+    return
+  }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('未登录')
+    
+    // 1. 删除任务进度记录
+    await supabase
+      .from('task_progress')
+      .delete()
+      .eq('task_id', task.id)
+      .eq('user_id', user.id)
+    
+    // 2. 删除任务完成记录
+    await supabase
+      .from('task_completions')
+      .delete()
+      .eq('task_id', task.id)
+      .eq('user_id', user.id)
+    
+    // 3. 删除任务
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', task.id)
+      .eq('user_id', user.id)
+    
+    if (error) throw error
+    
+    alert('✅ 任务已删除')
+    await loadTasks()
+  } catch (error) {
+    console.error('删除任务失败:', error)
+    alert('删除失败: ' + error.message)
+  }
+}
+
 // 打开任务详情
 function openTaskDetail(task) {
   selectedTask.value = task
@@ -994,6 +1065,10 @@ function getTodayCompletedCount(task) {
 }
 
 function isRuleCompletedToday(ruleId, task) {
+  // 优先使用今日交易记录检测
+  if (task.todayCompletions?.[ruleId]) return true
+  
+  // 回退到 combo_progress 检测
   if (!task.progress?.combo_progress) return false
   
   const today = new Date().toISOString().split('T')[0]
@@ -1540,6 +1615,18 @@ onMounted(async () => {
   background: #d3f9d8;
   color: #2b8a3e;
   cursor: default;
+}
+
+.btn-delete {
+  background: #ffe3e3;
+  color: #c92a2a;
+  border: none;
+  transition: all 0.3s;
+}
+
+.btn-delete:hover {
+  background: #ff6b6b;
+  color: white;
 }
 
 /* 列表视图 */
