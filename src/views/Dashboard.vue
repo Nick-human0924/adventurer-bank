@@ -491,8 +491,27 @@ async function loadStats() {
 
 // 加载孩子列表
 async function loadChildren() {
-  const { data } = await supabase.from('children').select('*').order('name')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  
+  console.log('🔄 Dashboard: 加载孩子，用户ID:', user.id)
+  
+  const { data, error } = await supabase
+    .from('children')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('name')
+  
+  if (error) {
+    console.error('❌ Dashboard: 加载孩子失败:', error)
+    return
+  }
+  
   children.value = data || []
+  console.log('✅ Dashboard: 加载到', children.value.length, '个孩子')
+  children.value.forEach(c => {
+    console.log(`  - ${c.name}: ${c.current_balance}金币, ${c.gem_balance || 0}宝石`)
+  })
   
   // 自动选择第一个孩子
   if (children.value.length > 0 && !selectedChildId.value) {
@@ -500,7 +519,6 @@ async function loadChildren() {
   }
   
   // 获取用户信息（用于多孩子时的标题）
-  const { data: { user } } = await supabase.auth.getUser()
   if (user?.user_metadata?.name) {
     userName.value = user.user_metadata.name
   } else if (user?.email) {
