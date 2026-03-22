@@ -199,7 +199,8 @@
         <div class="reward-section">
           <div class="reward-info">
             <span class="reward-label">🎁 完成奖励</span>
-            <span class="reward-points">+{{ task.reward_points || task.points || 0 }}</span>
+            <span class="reward-points">+{{ task.reward_points || 0 }}💰</span>
+            <span v-if="task.reward_gems" class="reward-gems">+{{ task.reward_gems }}💎</span>
           </div>
           <div class="time-info">
             <span v-if="task.cycle_end" class="time-left">
@@ -269,7 +270,10 @@
           </div>
         </div>
         
-        <div class="list-reward">+{{ task.reward_points || task.points || 0 }}</div>
+        <div class="list-reward">
+          +{{ task.reward_points || 0 }}💰
+          <span v-if="task.reward_gems" class="list-gems">+{{ task.reward_gems }}💎</span>
+        </div>
         
         <div class="list-status" :class="task.status">
           {{ getStatusText(task.status) }}
@@ -389,6 +393,24 @@
               <button type="button" @click="taskForm.reward_points = taskForm.reward_points + 5">+</button>
               <span class="unit">金币</span>
             </div>
+          </div>
+          
+          <!-- 宝石奖励 -->
+          <div class="form-group">
+            <label>🏆 特殊奖励宝石（可选）</label>
+            <div class="number-input gem-input">
+              <button type="button" @click="taskForm.reward_gems = Math.max(0, (taskForm.reward_gems || 0) - 1)">-</button>
+              <input 
+                v-model.number="taskForm.reward_gems" 
+                type="number" 
+                min="0" 
+                step="1"
+                placeholder="0"
+              >
+              <button type="button" @click="taskForm.reward_gems = (taskForm.reward_gems || 0) + 1">+</button>
+              <span class="unit gem-unit">💎 宝石</span>
+            </div>
+            <small class="form-hint">宝石用于兑换特殊奖品，只能通过完成复杂任务获得</small>
           </div>
           
           <!-- 关联行为规则（所有任务类型） -->
@@ -551,8 +573,9 @@
           <div class="detail-reward">
             <h4>🎁 完成奖励</h4>            
             <div class="reward-display">
-              <span class="reward-amount">{{ selectedTask.reward_points || selectedTask.points || 0 }}</span>
-              <span class="reward-unit">金币</span>            </div>
+              <span class="reward-amount">{{ selectedTask.reward_points || 0 }}💰</span>
+              <span v-if="selectedTask.reward_gems" class="reward-gems-amount">+{{ selectedTask.reward_gems }}💎</span>
+            </div>
             
             <div v-if="selectedTask.progress?.reward_claimed" class="claimed-info">
               ✅ 已于 {{ formatDate(selectedTask.progress.reward_claimed_at) }} 领取
@@ -602,6 +625,7 @@ const taskForm = reactive({
   cycle_start: new Date().toISOString().split('T')[0],
   cycle_end: '',
   reward_points: 20,
+  reward_gems: 0,
   description: '',
   child_ids: [],
   icon: '📋'
@@ -854,6 +878,7 @@ async function saveTask() {
       task_type: taskForm.task_type,
       description: taskForm.description,
       reward_points: taskForm.reward_points,
+      reward_gems: taskForm.reward_gems || 0,
       points: taskForm.reward_points,
       cycle_start: taskForm.cycle_start || null,
       cycle_end: taskForm.cycle_end || null,
@@ -965,6 +990,7 @@ async function claimReward(task) {
     if (!user) throw new Error('未登录')
     
     const rewardPoints = task.reward_points || 0
+    const rewardGems = task.reward_gems || 0
     const childId = task.progress.child_id
     
     // 1. 创建交易记录（奖励金币）
@@ -979,20 +1005,26 @@ async function claimReward(task) {
     
     if (txError) throw txError
     
-    // 2. 更新孩子的金币
+    // 2. 更新孩子的金币和宝石
     const { data: child } = await supabase
       .from('children')
-      .select('current_balance, total_points')
+      .select('current_balance, total_points, gem_balance')
       .eq('id', childId)
       .single()
     
     if (child) {
+      const updateData = {
+        current_balance: child.current_balance + rewardPoints,
+        total_points: child.total_points + rewardPoints
+      }
+      // 如果有宝石奖励，同时更新宝石
+      if (rewardGems > 0) {
+        updateData.gem_balance = (child.gem_balance || 0) + rewardGems
+      }
+      
       await supabase
         .from('children')
-        .update({
-          current_balance: child.current_balance + rewardPoints,
-          total_points: child.total_points + rewardPoints
-        })
+        .update(updateData)
         .eq('id', childId)
     }
     
@@ -1002,7 +1034,23 @@ async function claimReward(task) {
       .update({ reward_claimed: true })
       .eq('id', task.progress.id)
     
-    alert(`🎉 恭喜！任务"${task.title}"完成！获得 ${rewardPoints} 金币`)
+    // 4. 如果有宝石奖励，创建宝石获得记录
+    if (rewardGems > 0) {
+      const { error: gemError } = await supabase.from('gem_transactions').insert({
+        child_id: childId,
+        gems: rewardGems,
+        type: 'earn',
+        note: `完成任务获得宝石：${task.title}`,
+        user_id: user.id
+      })
+      if (gemError) console.error('宝石记录创建失败:', gemError)
+    }
+    
+    let successMsg = `🎉 恭喜！任务"${task.title}"完成！获得 ${rewardPoints} 金币`
+    if (rewardGems > 0) {
+      successMsg += ` + ${rewardGems}💎 宝石`
+    }
+    alert(successMsg)
     await loadTasks()
   } catch (error) {
     console.error('领取奖励失败:', error)
@@ -1606,6 +1654,29 @@ onMounted(async () => {
   font-size: 1rem;
 }
 
+.reward-gems {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-left: 8px;
+}
+
+.gem-input {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}
+
+.gem-input input {
+  background: white;
+}
+
+.gem-unit {
+  color: #7b1fa2;
+  font-weight: 600;
+}
+
 .time-info {
   font-size: 0.85rem;
   color: #868e96;
@@ -1722,6 +1793,18 @@ onMounted(async () => {
   padding: 6px 14px;
   border-radius: 20px;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.list-gems {
+  background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
 }
 
 .list-status {
@@ -2098,6 +2181,16 @@ onMounted(async () => {
   font-size: 2.5rem;
   font-weight: 800;
   color: #f08c00;
+}
+
+.reward-gems-amount {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #9b59b6;
+  background: linear-gradient(135deg, #e7d8f3 0%, #f3e5f5 100%);
+  padding: 4px 12px;
+  border-radius: 12px;
+  margin-left: 8px;
 }
 
 .reward-unit {

@@ -15,7 +15,7 @@
         <label>👶 选择孩子：</label>
         <select v-model="selectedChildId" @change="loadOrders">
           <option v-for="child in children" :key="child.id" :value="child.id">
-            {{ child.avatar?.startsWith('data:') ? '' : (child.avatar || '👶') }} {{ child.name }} ({{ child.current_balance }} 金币)
+            {{ child.avatar?.startsWith('data:') ? '' : (child.avatar || '👶') }} {{ child.name }} ({{ child.current_balance }}💰 {{ child.gem_balance || 0 }}💎)
           </option>
         </select>
       </div>
@@ -57,6 +57,11 @@
           {{ prize.stock <= 0 ? '已售罄' : `剩余 ${prize.stock} 件` }}
         </div>
         
+        <!-- 奖品类型标签 -->
+        <div class="prize-type-badge" :class="prize.price_type || 'coins'">
+          {{ (prize.price_type || 'coins') === 'coins' ? '💰 金币兑换' : '💎 宝石专属' }}
+        </div>
+        
         <!-- 奖品图片 -->
         <div class="prize-image">
           <img v-if="prize.image" :src="prize.image" :alt="prize.name" />
@@ -69,9 +74,9 @@
           <p class="prize-desc">{{ prize.description || '暂无描述' }}</p>
           
           <div class="prize-price">
-            <span class="price-icon">💰</span>
-            <span class="price-value">{{ prize.price }}</span>
-            <span class="price-unit">金币</span>
+            <span class="price-icon">{{ (prize.price_type || 'coins') === 'coins' ? '💰' : '💎' }}</span>
+            <span class="price-value" :class="prize.price_type || 'coins'">{{ prize.price }}</span>
+            <span class="price-unit">{{ (prize.price_type || 'coins') === 'coins' ? '金币' : '宝石' }}</span>
           </div>
         </div>
         
@@ -84,8 +89,11 @@
         >
           <span v-if="prize.stock <= 0">已售罄</span>
           <span v-else-if="!selectedChild">请先选择孩子</span>
-          <span v-else-if="selectedChild.current_balance < prize.price">
-            金币不足 (还差 {{ prize.price - selectedChild.current_balance }})
+          <span v-else-if="(prize.price_type || 'coins') === 'gems' && (selectedChild.gem_balance || 0) < prize.price">
+            💎 宝石不足 (还差 {{ prize.price - (selectedChild.gem_balance || 0) }})
+          </span>
+          <span v-else-if="(prize.price_type || 'coins') === 'coins' && selectedChild.current_balance < prize.price">
+            💰 金币不足 (还差 {{ prize.price - selectedChild.current_balance }})
           </span>
           <span v-else>
             帮 {{ selectedChild?.name }} 兑换
@@ -124,14 +132,30 @@
           
           <div class="form-row">
             <div class="form-group">
-              <label>所需金币 *</label>
-              <input v-model.number="prizeForm.price" type="number" min="1" placeholder="100" />
+              <label>货币类型 *</label>
+              <div class="currency-selector">
+                <label class="currency-option" :class="{ active: prizeForm.price_type === 'coins' }">
+                  <input type="radio" v-model="prizeForm.price_type" value="coins" />
+                  <span class="currency-icon">💰</span>
+                  <span>金币</span>
+                </label>
+                <label class="currency-option" :class="{ active: prizeForm.price_type === 'gems' }">
+                  <input type="radio" v-model="prizeForm.price_type" value="gems" />
+                  <span class="currency-icon">💎</span>
+                  <span>宝石</span>
+                </label>
+              </div>
             </div>
             
             <div class="form-group">
-              <label>库存数量 *</label>
-              <input v-model.number="prizeForm.stock" type="number" min="0" placeholder="10" />
+              <label>所需{{ prizeForm.price_type === 'gems' ? '宝石' : '金币' }} *</label>
+              <input v-model.number="prizeForm.price" type="number" min="1" :placeholder="prizeForm.price_type === 'gems' ? '5' : '100'" />
             </div>
+          </div>
+          
+          <div class="form-group">
+            <label>库存数量 *</label>
+            <input v-model.number="prizeForm.stock" type="number" min="0" placeholder="10" />
           </div>
           
           <div class="form-group">
@@ -310,6 +334,7 @@ const celebrationData = ref(null)
 const prizeForm = ref({
   name: '',
   description: '',
+  price_type: 'coins',
   price: 100,
   stock: 10,
   image: ''
@@ -367,6 +392,11 @@ async function loadOrders() {
 function canExchange(prize) {
   if (!selectedChild.value) return false
   if (prize.stock <= 0) return false
+  
+  const priceType = prize.price_type || 'coins'
+  if (priceType === 'gems') {
+    return (selectedChild.value.gem_balance || 0) >= prize.price
+  }
   return selectedChild.value.current_balance >= prize.price
 }
 
@@ -374,7 +404,13 @@ function canExchange(prize) {
 function getExchangeBtnClass(prize) {
   if (prize.stock <= 0) return 'disabled'
   if (!selectedChild.value) return 'disabled'
-  if (selectedChild.value.current_balance < prize.price) return 'insufficient'
+  
+  const priceType = prize.price_type || 'coins'
+  if (priceType === 'gems') {
+    if ((selectedChild.value.gem_balance || 0) < prize.price) return 'insufficient'
+  } else {
+    if (selectedChild.value.current_balance < prize.price) return 'insufficient'
+  }
   return 'primary'
 }
 
@@ -404,13 +440,19 @@ async function confirmExchange() {
     
     const prize = selectedPrize.value
     const child = selectedChild.value
+    const priceType = prize.price_type || 'coins'
     
-    // 1. 扣除金币
+    // 1. 扣除货币（金币或宝石）
+    const updateData = {}
+    if (priceType === 'gems') {
+      updateData.gem_balance = (child.gem_balance || 0) - prize.price
+    } else {
+      updateData.current_balance = child.current_balance - prize.price
+    }
+    
     const { error: childError } = await supabase
       .from('children')
-      .update({
-        current_balance: child.current_balance - prize.price
-      })
+      .update(updateData)
       .eq('id', child.id)
     
     if (childError) throw childError
@@ -423,23 +465,34 @@ async function confirmExchange() {
     
     if (prizeError) throw prizeError
     
-    // 3. 创建交易记录（消费）
-    const { error: txError } = await supabase.from('transactions').insert({
-      child_id: child.id,
-      points: prize.price,
-      type: 'spend',
-      note: `兑换奖品：${prize.name}`,
-      rule_id: null,
-      user_id: user.id
-    })
-    
-    if (txError) throw txError
+    // 3. 创建交易记录（金币消费）或宝石交易记录
+    if (priceType === 'gems') {
+      const { error: gemError } = await supabase.from('gem_transactions').insert({
+        child_id: child.id,
+        gems: prize.price,
+        type: 'spend',
+        note: `兑换奖品：${prize.name}`,
+        user_id: user.id
+      })
+      if (gemError) throw gemError
+    } else {
+      const { error: txError } = await supabase.from('transactions').insert({
+        child_id: child.id,
+        points: prize.price,
+        type: 'spend',
+        note: `兑换奖品：${prize.name}`,
+        rule_id: null,
+        user_id: user.id
+      })
+      if (txError) throw txError
+    }
     
     // 4. 创建订单
     const { error: orderError } = await supabase.from('orders').insert({
       child_id: child.id,
       prize_id: prize.id,
       price: prize.price,
+      price_type: priceType,
       message: exchangeMessage.value,
       status: 'completed',
       user_id: user.id
@@ -451,7 +504,8 @@ async function confirmExchange() {
     celebrationData.value = {
       childName: child.name,
       prizeName: prize.name,
-      message: exchangeMessage.value
+      message: exchangeMessage.value,
+      currency: priceType === 'gems' ? '宝石' : '金币'
     }
     
     closeExchangeModal()
@@ -570,6 +624,7 @@ async function savePrize() {
     const { error } = await supabase.from('prizes').insert({
       name: prizeForm.value.name,
       description: prizeForm.value.description,
+      price_type: prizeForm.value.price_type || 'coins',
       price: prizeForm.value.price,
       stock: prizeForm.value.stock,
       image: prizeForm.value.image,
@@ -593,6 +648,7 @@ function closeAddPrizeModal() {
   prizeForm.value = {
     name: '',
     description: '',
+    price_type: 'coins',
     price: 100,
     stock: 10,
     image: ''
@@ -798,9 +854,35 @@ onMounted(() => {
   color: #f5576c;
 }
 
+.price-value.gems {
+  color: #9b59b6;
+}
+
 .price-unit {
   font-size: 0.9rem;
   color: #868e96;
+}
+
+/* 奖品类型标签 */
+.prize-type-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 2;
+}
+
+.prize-type-badge.coins {
+  background: #fff3bf;
+  color: #e67700;
+}
+
+.prize-type-badge.gems {
+  background: #e7d8f3;
+  color: #7b2cbf;
 }
 
 .exchange-btn {
@@ -1012,6 +1094,41 @@ onMounted(() => {
   border-radius: 10px;
   cursor: pointer;
   font-weight: 500;
+}
+
+/* 货币选择器 */
+.currency-selector {
+  display: flex;
+  gap: 12px;
+}
+
+.currency-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: white;
+}
+
+.currency-option:hover {
+  border-color: #adb5bd;
+}
+
+.currency-option.active {
+  border-color: #667eea;
+  background: #f3f0ff;
+}
+
+.currency-option input {
+  display: none;
+}
+
+.currency-icon {
+  font-size: 1.2rem;
 }
 
 /* 确认信息 */

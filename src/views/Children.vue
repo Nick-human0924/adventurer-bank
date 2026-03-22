@@ -42,11 +42,17 @@
         <div class="hero-stats">
           <div class="stat-row">
             <div class="stat-item">
-              <span class="stat-label">💎 当前金币</span>
+              <span class="stat-label">💰 当前金币</span>
               <span class="stat-value current" :class="{ 'score-bounce': bouncingChild === child.id }">
                 {{ child.current_balance }}
               </span>
             </div>
+            <div class="stat-item">
+              <span class="stat-label">💎 宝石</span>
+              <span class="stat-value gem">{{ child.gem_balance || 0 }}</span>
+            </div>
+          </div>
+          <div class="stat-row secondary">
             <div class="stat-item">
               <span class="stat-label">⭐ 累计金币</span>
               <span class="stat-value total">{{ child.total_points }}</span>
@@ -802,6 +808,22 @@ onMounted(() => {
 
 .stat-value.total {
   color: #667eea;
+}
+
+.stat-value.gem {
+  color: #9b59b6;
+  text-shadow: 0 0 10px rgba(155, 89, 182, 0.3);
+}
+
+.stat-row.secondary {
+  margin-bottom: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e9ecef;
+}
+
+.stat-row.secondary .stat-item {
+  flex: 1;
 }
 
 /* 分数弹跳动画 */
