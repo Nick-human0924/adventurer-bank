@@ -73,12 +73,17 @@ router.beforeEach(async (to, from, next) => {
 })
 
 // 监听认证状态变化
+let initialAuthCheck = true
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     router.push('/login')
   } else if (event === 'SIGNED_IN') {
-    router.push('/')
+    // 只在用户主动登录时跳转，页面加载恢复会话时不跳转
+    if (!initialAuthCheck && router.currentRoute.value.path === '/login') {
+      router.push('/')
+    }
   }
+  initialAuthCheck = false
 })
 
 export default router

@@ -25,7 +25,13 @@
         <!-- 英雄头像区域 -->
         <div class="hero-avatar-section">
           <div class="hero-avatar">
-            <span class="avatar-emoji">{{ child.avatar || '👶' }}</span>
+            <img 
+              v-if="child.avatar && child.avatar.startsWith('data:')" 
+              :src="child.avatar" 
+              class="avatar-image"
+              alt="头像"
+            />
+            <span v-else class="avatar-emoji">{{ child.avatar || '👶' }}</span>
             <div class="avatar-glow"></div>
           </div>
           <h3 class="hero-name">{{ child.name }}</h3>
@@ -175,6 +181,21 @@
           
           <div class="form-group">
             <label>🎨 选择头像</label>
+            
+            <!-- 自定义头像上传 -->
+            <div class="custom-avatar-upload">
+              <div class="avatar-preview" v-if="form.avatar && !form.avatar.startsWith('👶')">
+                <img :src="form.avatar" alt="头像" />
+                <button class="remove-avatar" @click="form.avatar = '👶'" title="移除">✕</button>
+              </div>
+              <label class="upload-btn" v-else>
+                <input type="file" accept="image/*" @change="handleAvatarUpload" hidden />
+                <span>📷 上传照片</span>
+              </label>
+            </div>
+            
+            <div class="avatar-divider"><span>或选择表情</span></div>
+            
             <div class="avatar-selector">
               <span 
                 v-for="avatar in avatars" 
@@ -474,6 +495,24 @@ function closeQuickAddModal() {
   quickAddChild.value = null
 }
 
+// 处理头像上传
+function handleAvatarUpload(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  
+  // 检查文件大小（限制 2MB）
+  if (file.size > 2 * 1024 * 1024) {
+    showMessage('error', '图片大小不能超过 2MB')
+    return
+  }
+  
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    form.value.avatar = e.target.result
+  }
+  reader.readAsDataURL(file)
+}
+
 // 确认快速加分
 async function confirmQuickAdd(action) {
   if (!quickAddChild.value) return
@@ -672,6 +711,14 @@ onMounted(() => {
 
 .avatar-emoji {
   font-size: 3.5rem;
+  z-index: 2;
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
   z-index: 2;
 }
 
@@ -1135,6 +1182,79 @@ onMounted(() => {
 
 .close-btn:hover {
   color: #495057;
+}
+
+/* 自定义头像上传 */
+.custom-avatar-upload {
+  margin-bottom: 16px;
+}
+
+.avatar-preview {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #667eea;
+}
+
+.avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-avatar {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.upload-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.avatar-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: #868e96;
+  font-size: 0.85rem;
+}
+
+.avatar-divider::before,
+.avatar-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e9ecef;
 }
 
 /* 头像选择器 */

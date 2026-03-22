@@ -291,8 +291,6 @@ const pendingTasks = computed(() => {
   return tasks.value.filter(t => t.status !== 'completed').slice(0, 5)
 })
 
-let trendChartInstance = null
-let pieChartInstance = null
 let subscriptions = []
 
 // 加载统计数据
