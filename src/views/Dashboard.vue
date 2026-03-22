@@ -77,7 +77,10 @@
                 {{ task.children?.map(c => c.name).join(', ') || '未分配' }}
               </span>
             </div>
-            <span class="todo-points">+{{ task.points }}</span>
+            <span class="todo-points">
+              <span v-if="task.reward_points > 0">+{{ task.reward_points }}💰</span>
+              <span v-if="task.reward_gems > 0">+{{ task.reward_gems }}💎</span>
+            </span>
           </div>
         </div>
       </div>
