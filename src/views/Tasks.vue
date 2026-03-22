@@ -659,10 +659,15 @@ const calendarDays = computed(() => {
 // 加载任务
 async function loadTasks() {
   try {
-    // 获取任务列表
+    // 获取当前用户
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('未登录')
+    
+    // 获取任务列表（带 user_id 过滤）
     const { data: tasksData, error } = await supabase
       .from('tasks')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
     
     if (error) throw error
@@ -670,11 +675,12 @@ async function loadTasks() {
     // 获取每个任务的进度
     const tasksWithProgress = await Promise.all(
       (tasksData || []).map(async (task) => {
-        // 获取任务进度
+        // 获取任务进度（带 user_id 过滤）
         const { data: progress } = await supabase
           .from('task_progress')
           .select('*')
           .eq('task_id', task.id)
+          .eq('user_id', user.id)
           .single()
         
         // 如果是组合任务，获取关联的规则详情
@@ -684,6 +690,7 @@ async function loadTasks() {
             .from('rules')
             .select('*')
             .in('id', task.linked_rule_ids)
+            .eq('user_id', user.id)
           linkedRules = rules || []
         }
         

@@ -356,20 +356,25 @@ async function loadTransactions() {
 
 // 加载任务
 async function loadTasks() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  
   const { data: tasksData } = await supabase
     .from('tasks')
     .select('*')
+    .eq('user_id', user.id)
     .neq('status', 'completed')
     .order('created_at', { ascending: false })
     .limit(10)
   
-  // 获取任务分配的孩子（从 task_progress 表）
+  // 获取任务分配的孩子（从 task_progress 表，带 user_id 过滤）
   const tasksWithChildren = await Promise.all(
     (tasksData || []).map(async (task) => {
       const { data: progress } = await supabase
         .from('task_progress')
         .select('child_id, children(name, avatar)')
         .eq('task_id', task.id)
+        .eq('user_id', user.id)
       
       return {
         ...task,
