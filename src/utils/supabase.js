@@ -136,6 +136,11 @@ export function getDbStatus() {
   return dbStatus.value
 }
 
+// 兼容旧代码的订阅函数
+export function subscribeToTable(table, callback) {
+  return subscribeToUserTable(table, callback)
+}
+
 // 监听认证状态变化
 supabase.auth.onAuthStateChange((event, session) => {
   currentUser.value = session?.user || null
