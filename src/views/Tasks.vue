@@ -906,6 +906,13 @@ async function saveTask() {
     // 所有任务类型都支持关联行为规则
     taskData.linked_rule_ids = taskForm.linked_rule_ids
     
+    console.log('💾 保存任务:', {
+      title: taskData.title,
+      type: taskData.task_type,
+      linkedIds: taskData.linked_rule_ids,
+      childIds: taskForm.child_ids
+    })
+    
     if (editingTask.value) {
       // 更新任务
       const { error } = await supabase
@@ -932,7 +939,12 @@ async function saveTask() {
         .select()
         .single()
       
-      if (error) throw error
+      if (error) {
+        console.error('❌ 创建任务失败:', error)
+        throw error
+      }
+      
+      console.log('✅ 任务创建成功:', newTask.id, 'linkedIds:', newTask.linked_rule_ids)
       
       // 为每个孩子创建进度记录
       for (const childId of taskForm.child_ids) {
