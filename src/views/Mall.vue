@@ -25,9 +25,14 @@
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div class="card-title" style="margin: 0;">🏪 奖品列表</div>
-        <button class="btn btn-secondary" @click="showOrders = true">
-          📋 我的订单
-        </button>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-primary" @click="showAddPrizeModal = true">
+            ➕ 添加奖品
+          </button>
+          <button class="btn btn-secondary" @click="showOrders = true">
+            📋 我的订单
+          </button>
+        </div>
       </div>
     </div>
 
@@ -99,6 +104,13 @@
             帮 {{ selectedChild?.name }} 兑换
           </span>
         </button>
+        
+        <!-- 管理按钮 -->
+        <div class="prize-actions">
+          <button class="btn btn-small btn-danger" @click="deletePrize(prize)">
+            🗑️ 删除
+          </button>
+        </div>
       </div>
     </div>
 
@@ -665,6 +677,32 @@ function closeAddPrizeModal() {
     price: 100,
     stock: 10,
     image: ''
+  }
+}
+
+// 删除奖品
+async function deletePrize(prize) {
+  if (!confirm(`确定要删除奖品 "${prize.name}" 吗？\n\n此操作不可恢复！`)) {
+    return
+  }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('未登录')
+    
+    const { error } = await supabase
+      .from('prizes')
+      .delete()
+      .eq('id', prize.id)
+      .eq('user_id', user.id)
+    
+    if (error) throw error
+    
+    await loadPrizes()
+    alert('✅ 奖品已删除')
+  } catch (error) {
+    console.error('删除奖品失败:', error)
+    alert('删除失败: ' + error.message)
   }
 }
 
