@@ -499,7 +499,13 @@ async function addBehavior() {
 
 // 初始化趋势图
 async function initTrendChart() {
-  if (!trendChart.value) return
+  // 等待 DOM 准备好
+  await nextTick()
+  
+  if (!trendChart.value) {
+    console.log('trendChart DOM 元素未准备好')
+    return
+  }
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
@@ -540,8 +546,19 @@ async function initTrendChart() {
     spent.push(spentPoints)
   }
   
+  // 在初始化之前再次检查 DOM
+  if (!trendChart.value) {
+    console.log('trendChart DOM 元素在数据加载后丢失')
+    return
+  }
+  
   if (!trendChartInstance) {
-    trendChartInstance = echarts.init(trendChart.value)
+    try {
+      trendChartInstance = echarts.init(trendChart.value)
+    } catch (e) {
+      console.error('ECharts 初始化失败:', e)
+      return
+    }
   }
   
   const option = {

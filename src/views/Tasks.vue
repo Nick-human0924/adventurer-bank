@@ -715,7 +715,7 @@ async function loadTasks() {
           .select('*')
           .eq('task_id', task.id)
           .eq('user_id', user.id)
-          .single()
+          .maybeSingle()
         
         // 如果是组合任务，获取关联的规则详情
         let linkedRules = []
@@ -867,23 +867,32 @@ async function saveTask() {
       taskData.target_count = taskForm.target_count
     }
     
-    if (taskForm.task_type === 'combo') {
-      taskData.linked_rule_ids = taskForm.linked_rule_ids
-    }
+    // 所有任务类型都支持关联行为规则
+    taskData.linked_rule_ids = taskForm.linked_rule_ids
     
     if (editingTask.value) {
       // 更新任务
       const { error } = await supabase
         .from('tasks')
-        .update(taskData)
+        .update({
+          ...taskData,
+          linked_rule_ids: taskForm.linked_rule_ids
+        })
         .eq('id', editingTask.value.id)
       
       if (error) throw error
     } else {
       // 创建任务
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('未登录')
+      
       const { data: newTask, error } = await supabase
         .from('tasks')
-        .insert(taskData)
+        .insert({
+          ...taskData,
+          user_id: user.id,
+          child_ids: taskForm.child_ids
+        })
         .select()
         .single()
       
@@ -895,7 +904,8 @@ async function saveTask() {
           task_id: newTask.id,
           child_id: childId,
           status: 'active',
-          combo_progress: taskForm.task_type === 'combo' ? {} : {}
+          combo_progress: taskForm.task_type === 'combo' ? {} : {},
+          user_id: user.id
         })
       }
     }

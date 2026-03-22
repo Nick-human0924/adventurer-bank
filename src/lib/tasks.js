@@ -223,10 +223,6 @@ async function handleContinuousTask(task, progress, childId, date) {
     last_completed_date: date
   }
   
-  if (!progress.first_completed_date) {
-    updateData.first_completed_date = date
-  }
-  
   if (isCompleted) {
     updateData.status = TaskStatus.COMPLETED
   }
@@ -282,8 +278,7 @@ async function handleCumulativeTask(task, progress, childId, date) {
     .update({
       current_count: newCount,
       last_completed_date: date,
-      status: isCompleted ? TaskStatus.COMPLETED : TaskStatus.ACTIVE,
-      first_completed_date: progress.first_completed_date || date
+      status: isCompleted ? TaskStatus.COMPLETED : TaskStatus.ACTIVE
     })
     .eq('id', progress.id)
   
@@ -677,7 +672,6 @@ export async function createMockSuperWeekChallenge(childId, userId) {
         current_count: 3,
         status: TaskStatus.ACTIVE,
         combo_progress: comboProgress,
-        first_completed_date: mockDate.toISOString().split('T')[0],
         last_completed_date: new Date(mockDate.setDate(mockDate.getDate() + 2)).toISOString().split('T')[0],
         user_id: userId
       })
