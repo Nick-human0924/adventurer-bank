@@ -43,6 +43,13 @@
           </span>
           <span v-else class="no-child">请先添加孩子</span>
         </div>
+        
+        <!-- 新增行为按钮 -->
+        <div class="add-behavior-bar">
+          <button class="btn btn-success add-behavior-btn" @click="showAddBehaviorModal = true" :disabled="!selectedChildId">
+            <span>➕ 新增行为记录</span>
+          </button>
+        </div>
       </div>
       
       <!-- 右侧：待办事项窗口 -->
@@ -164,6 +171,54 @@
       <span class="toast-icon">{{ recordMessage.type === 'success' ? '✅' : '❌' }}</span>
       <span class="toast-text">{{ recordMessage.text }}</span>
     </div>
+    
+    <!-- 新增行为弹窗 -->
+    <div v-if="showAddBehaviorModal" class="modal-overlay" @click.self="showAddBehaviorModal = false">
+      <div class="modal behavior-modal">
+        <div class="modal-header">
+          <h3>➕ 新增行为记录</h3>
+          <button class="close-btn" @click="showAddBehaviorModal = false">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>选择行为</label>
+            <div class="behavior-grid">
+              <button 
+                v-for="rule in goodRules" 
+                :key="rule.id"
+                class="behavior-option"
+                :class="{ active: selectedBehavior?.id === rule.id }"
+                @click="selectedBehavior = rule"
+              >
+                <span class="behavior-emoji">{{ rule.icon || '⭐' }}</span>
+                <span class="behavior-name">{{ rule.name }}</span>
+                <span class="behavior-points">+{{ rule.points }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>备注（可选）</label>
+            <input v-model="behaviorNote" type="text" placeholder="添加备注...">
+          </div>
+          <div v-if="linkedTasks.length > 0" class="linked-tasks">
+            <label>📋 关联任务（将自动完成）</label>
+            <div class="task-list">
+              <div v-for="task in linkedTasks" :key="task.id" class="linked-task-item">
+                <span class="task-icon">{{ task.icon || '📋' }}</span>
+                <span class="task-title">{{ task.title }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showAddBehaviorModal = false">取消</button>
+          <button class="btn btn-primary" @click="addBehavior" :disabled="!selectedBehavior || addingBehavior">
+            <span v-if="addingBehavior">保存中...</span>
+            <span v-else>确认记录</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -191,6 +246,22 @@ const recentTransactions = ref([])
 const tasks = ref([])
 const selectedChildId = ref('')
 const recordMessage = ref(null)
+
+// 新增行为弹窗状态
+const showAddBehaviorModal = ref(false)
+const selectedBehavior = ref(null)
+const behaviorNote = ref('')
+const addingBehavior = ref(false)
+
+// 关联的任务
+const linkedTasks = computed(() => {
+  if (!selectedBehavior.value || !selectedChildId.value) return []
+  return tasks.value.filter(t => 
+    t.task_type === 'single' && 
+    t.status === 'active' &&
+    t.title?.includes(selectedBehavior.value.name)
+  )
+})
 
 // 快速加分操作
 const quickActions = [
@@ -292,20 +363,20 @@ async function loadTasks() {
     .order('created_at', { ascending: false })
     .limit(10)
   
-  // 获取任务分配的孩子
+  // 获取任务分配的孩子（从 task_progress 表）
   const tasksWithChildren = await Promise.all(
     (tasksData || []).map(async (task) => {
-      const { data: assignments } = await supabase
-        .from('task_assignments')
+      const { data: progress } = await supabase
+        .from('task_progress')
         .select('child_id, children(name, avatar)')
         .eq('task_id', task.id)
       
       return {
         ...task,
-        children: assignments?.map(a => ({
-          id: a.child_id,
-          name: a.children?.name,
-          avatar: a.children?.avatar
+        children: progress?.map(p => ({
+          id: p.child_id,
+          name: p.children?.name,
+          avatar: p.children?.avatar
         })) || []
       }
     })
@@ -350,6 +421,70 @@ async function quickAddPoints(action) {
   }
   
   setTimeout(() => recordMessage.value = null, 3000)
+}
+
+// 新增行为记录
+async function addBehavior() {
+  if (!selectedChildId.value || !selectedBehavior.value) return
+  
+  addingBehavior.value = true
+  const child = children.value.find(c => c.id === selectedChildId.value)
+  
+  try {
+    // 1. 创建交易记录
+    const { data: tx, error: txError } = await supabase.from('transactions').insert({
+      child_id: selectedChildId.value,
+      points: selectedBehavior.value.points,
+      type: 'earn',
+      note: behaviorNote.value || selectedBehavior.value.name,
+      rule_id: selectedBehavior.value.id
+    }).select().single()
+    
+    if (txError) throw txError
+    
+    // 2. 检查并更新关联的任务进度
+    for (const task of linkedTasks.value) {
+      // 获取任务进度
+      const { data: progress } = await supabase
+        .from('task_progress')
+        .select('*')
+        .eq('task_id', task.id)
+        .eq('child_id', selectedChildId.value)
+        .single()
+      
+      if (progress && progress.status !== 'completed') {
+        // 更新为已完成
+        await supabase.from('task_progress').update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          current_count: (progress.current_count || 0) + 1
+        }).eq('id', progress.id)
+        
+        // 更新任务状态
+        await supabase.from('tasks').update({
+          status: 'completed'
+        }).eq('id', task.id)
+      }
+    }
+    
+    recordMessage.value = { 
+      type: 'success', 
+      text: `✨ ${child?.name} ${selectedBehavior.value.name} +${selectedBehavior.value.points}分！${linkedTasks.value.length > 0 ? '（任务已同步完成）' : ''}`
+    }
+    
+    // 重置弹窗
+    showAddBehaviorModal.value = false
+    selectedBehavior.value = null
+    behaviorNote.value = ''
+    
+    await refreshData()
+  } catch (error) {
+    console.error('新增行为失败:', error)
+    recordMessage.value = { type: 'error', text: '记录失败: ' + error.message }
+  } finally {
+    addingBehavior.value = false
+    setTimeout(() => recordMessage.value = null, 3000)
+  }
 }
 
 // 初始化趋势图
@@ -897,5 +1032,128 @@ onUnmounted(() => {
 
 .chart {
   height: 300px;
+}
+
+/* 新增行为按钮 */
+.add-behavior-bar {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e9ecef;
+}
+
+.add-behavior-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.add-behavior-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(17, 153, 142, 0.4);
+}
+
+.add-behavior-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 行为弹窗 */
+.behavior-modal {
+  max-width: 500px;
+}
+
+.behavior-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.behavior-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  background: #f8f9fa;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.behavior-option:hover {
+  background: #e9ecef;
+}
+
+.behavior-option.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+}
+
+.behavior-emoji {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.behavior-name {
+  font-size: 0.95rem;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.behavior-points {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.behavior-option.active .behavior-points {
+  color: #ffd43b;
+  font-weight: 600;
+}
+
+.linked-tasks {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.linked-tasks label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.linked-task-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.task-icon {
+  font-size: 1.2rem;
+}
+
+.task-title {
+  font-size: 0.95rem;
+  color: #333;
+}
+
+@media (max-width: 768px) {
+  .behavior-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

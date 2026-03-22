@@ -86,21 +86,6 @@
     <!-- 主内容区 -->
     <main class="main-content" :class="{ 'auth-page': !isAuthenticated }">
       <router-view />
-      
-      <!-- 全局版本号显示（仅在登录后显示）-->
-      <div v-if="isAuthenticated" class="global-version-bar">
-        <div class="version-info">
-          <span class="version-tag">🏦 儿童行为银行</span>
-          <span class="version-divider">|</span>
-          <span class="version-label">当前版本</span>
-          <span class="version-number">v{{ appVersion }}</span>
-          <span class="version-divider">|</span>
-          <span class="version-date">2026-03-22</span>
-        </div>
-        <div class="version-check">
-          <span class="version-status success">✅ 已是最新版</span>
-        </div>
-      </div>
     </main>
   </div>
 </template>
@@ -123,7 +108,7 @@ const $router = useRouter()
 const { proxy } = getCurrentInstance()
 
 // 应用版本号
-const appVersion = '3.0.0'
+const appVersion = '3.0.1'
 
 // 过滤需要认证的路由
 const authRoutes = computed(() => {
