@@ -151,13 +151,38 @@
                 <span class="item-name">{{ rule.name }}</span>
               </div>
             </div>
+            <!-- 今日完成明细 -->
+            <div class="combo-today-detail">
+              <div class="today-title">📅 今日完成明细</div>
+              <div v-if="task.linkedRules?.length > 0" class="today-items">
+                <div 
+                  v-for="rule in task.linkedRules" 
+                  :key="rule.id"
+                  class="today-item"
+                  :class="{ completed: isRuleCompletedToday(rule.id, task) }"
+                >
+                  <span class="item-icon">{{ rule.icon || '📋' }}</span>
+                  <span class="item-name">{{ rule.name }}</span>
+                  <span class="item-status">
+                    {{ isRuleCompletedToday(rule.id, task) ? '✅' : '⬜' }}
+                  </span>
+                </div>
+              </div>
+              <div v-else class="no-rules-hint">
+                未关联行为规则
+              </div>
+            </div>
+            
             <!-- 今日完成提示 -->
             <div class="combo-today-status">
-              <span v-if="getTodayCompletedCount(task) === task.linkedRules?.length">
+              <span v-if="getTodayCompletedCount(task) === task.linkedRules?.length && task.linkedRules?.length > 0" class="status-completed">
                 🎉 今日组合已完成！
               </span>
-              <span v-else>
+              <span v-else-if="task.linkedRules?.length > 0" class="status-pending">
                 ⏳ 今日还需完成 {{ (task.linkedRules?.length || 0) - getTodayCompletedCount(task) }} 项
+              </span>
+              <span v-else class="status-no-rules">
+                ⚠️ 请关联行为规则
               </span>
             </div>
           </div>
@@ -321,41 +346,15 @@
           </div>
           
           <div v-if="taskForm.task_type === 'combo'" class="form-group">
-            <label>组合子任务 *</label>
-            <div class="combo-rules-selector">
-              <div v-if="availableRules.length === 0" class="no-rules">
-                请先前往"行为规则"页面创建规则
-              </div>
-              <div v-else class="rules-checkboxes">
-                <label 
-                  v-for="rule in availableRules" 
-                  :key="rule.id"
-                  class="rule-checkbox"
-                  :class="{ checked: taskForm.linked_rule_ids.includes(rule.id) }"
-                >
-                  <input 
-                    type="checkbox" 
-                    :value="rule.id"
-                    v-model="taskForm.linked_rule_ids"
-                  >
-                  <span class="rule-icon">{{ rule.icon || '📋' }}</span>
-                  <span class="rule-name">{{ rule.name }}</span>
-                  <span class="rule-points">+{{ rule.points }}</span>
-                </label>
-              </div>
+            <label>需要完成天数 *</label>
+            <div class="number-input">
+              <button type="button" @click="taskForm.target_count = Math.max(1, taskForm.target_count - 1)">-</button>
+              <input v-model.number="taskForm.target_count" type="number" min="1" max="30">
+              <button type="button" @click="taskForm.target_count = Math.min(30, taskForm.target_count + 1)">+</button>
+              <span class="unit">天</span>
             </div>
             
-            <div class="form-group">
-              <label>需要完成天数 *</label>
-              <div class="number-input">
-                <button type="button" @click="taskForm.target_count = Math.max(1, taskForm.target_count - 1)">-</button>
-                <input v-model.number="taskForm.target_count" type="number" min="1" max="30">
-                <button type="button" @click="taskForm.target_count = Math.min(30, taskForm.target_count + 1)">+</button>
-                <span class="unit">天</span>
-              </div>
-              
-              <small class="form-hint">每天完成所有子任务，坚持达到目标天数</small>
-            </div>
+            <small class="form-hint">每天完成所有子任务，坚持达到目标天数</small>
           </div>
           
           <!-- 任务周期 -->
@@ -386,6 +385,34 @@
               <button type="button" @click="taskForm.reward_points = taskForm.reward_points + 5">+</button>
               <span class="unit">积分</span>
             </div>
+          </div>
+          
+          <!-- 关联行为规则（所有任务类型） -->
+          <div class="form-group">
+            <label>关联行为规则</label>
+            <div class="linked-rules-selector">
+              <div v-if="availableRules.length === 0" class="no-rules">
+                请先前往"行为规则"页面创建规则
+              </div>
+              <div v-else class="rules-checkboxes">
+                <label 
+                  v-for="rule in availableRules" 
+                  :key="rule.id"
+                  class="rule-checkbox"
+                  :class="{ checked: taskForm.linked_rule_ids.includes(rule.id) }"
+                >
+                  <input 
+                    type="checkbox" 
+                    :value="rule.id"
+                    v-model="taskForm.linked_rule_ids"
+                  >
+                  <span class="rule-icon">{{ rule.icon || '📋' }}</span>
+                  <span class="rule-name">{{ rule.name }}</span>
+                  <span class="rule-points">+{{ rule.points }}</span>
+                </label>
+              </div>
+            </div>
+            <small class="form-hint">关联后，记录对应行为时将自动同步任务进度</small>
           </div>
           
           <!-- 任务描述 -->
@@ -1368,7 +1395,76 @@ onMounted(async () => {
   background: white;
   border-radius: 8px;
   font-size: 0.9rem;
+}
+
+.combo-today-status .status-completed {
+  color: #2b8a3e;
+  font-weight: 600;
+}
+
+.combo-today-status .status-pending {
+  color: #f08c00;
+}
+
+.combo-today-status .status-no-rules {
+  color: #868e96;
+}
+
+/* 今日明细 */
+.combo-today-detail {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.today-title {
+  font-size: 0.85rem;
+  font-weight: 600;
   color: #495057;
+  margin-bottom: 10px;
+}
+
+.today-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.today-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: white;
+  border-radius: 8px;
+  border-left: 3px solid #e9ecef;
+}
+
+.today-item.completed {
+  border-left-color: #51cf66;
+  background: #f0fdf4;
+}
+
+.today-item .item-icon {
+  font-size: 1.1rem;
+}
+
+.today-item .item-name {
+  flex: 1;
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.today-item .item-status {
+  font-size: 1.1rem;
+}
+
+.no-rules-hint {
+  text-align: center;
+  padding: 12px;
+  color: #868e96;
+  font-size: 0.9rem;
 }
 
 /* 奖励区域 */
@@ -1662,6 +1758,7 @@ onMounted(async () => {
   font-size: 0.9rem;
 }
 
+.linked-rules-selector,
 .combo-rules-selector {
   background: #f8f9fa;
   border-radius: 12px;

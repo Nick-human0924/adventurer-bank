@@ -337,20 +337,25 @@ async function loadRules() {
 
 // 加载交易记录
 async function loadTransactions() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  
   const { data } = await supabase
     .from('transactions')
     .select(`
       *,
       children(name),
-      rules(name)
+      rules(name, icon)
     `)
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(10)
   
   recentTransactions.value = (data || []).map(t => ({
     ...t,
     child_name: t.children?.name,
-    rule_name: t.rules?.name
+    rule_name: t.rules?.name || t.note || '-',
+    rule_icon: t.rules?.icon
   }))
 }
 
@@ -493,11 +498,13 @@ async function addBehavior() {
 }
 
 // 初始化趋势图
-function initTrendChart() {
+async function initTrendChart() {
   if (!trendChart.value) return
   
-  trendChartInstance = echarts.init(trendChart.value)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
   
+  // 获取最近7天的真实交易数据
   const dates = []
   const earned = []
   const spent = []
@@ -505,9 +512,36 @@ function initTrendChart() {
   for (let i = 6; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
+    const dateStr = d.toISOString().split('T')[0]
     dates.push(d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }))
-    earned.push(Math.floor(Math.random() * 50) + 20)
-    spent.push(Math.floor(Math.random() * 30) + 10)
+    
+    // 查询当天的获得积分
+    const { data: earnedData } = await supabase
+      .from('transactions')
+      .select('points')
+      .eq('user_id', user.id)
+      .eq('type', 'earn')
+      .gte('created_at', dateStr)
+      .lt('created_at', dateStr + 'T23:59:59')
+    
+    // 查询当天的消费积分
+    const { data: spentData } = await supabase
+      .from('transactions')
+      .select('points')
+      .eq('user_id', user.id)
+      .eq('type', 'spend')
+      .gte('created_at', dateStr)
+      .lt('created_at', dateStr + 'T23:59:59')
+    
+    const earnedPoints = earnedData?.reduce((sum, t) => sum + t.points, 0) || 0
+    const spentPoints = spentData?.reduce((sum, t) => sum + t.points, 0) || 0
+    
+    earned.push(earnedPoints)
+    spent.push(spentPoints)
+  }
+  
+  if (!trendChartInstance) {
+    trendChartInstance = echarts.init(trendChart.value)
   }
   
   const option = {
