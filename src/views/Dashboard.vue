@@ -358,12 +358,11 @@ async function deleteTransaction(tx) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
     
-    // 1. 删除交易记录
+    // 1. 删除交易记录（只按ID删除，RLS策略会控制权限）
     const { error: txError } = await supabase
       .from('transactions')
       .delete()
       .eq('id', tx.id)
-      .eq('user_id', user.id)
     
     if (txError) throw txError
     
@@ -412,7 +411,6 @@ async function batchDeleteTransactions() {
       .from('transactions')
       .select('*')
       .in('id', selectedTransactions.value)
-      .eq('user_id', user.id)
     
     // 按孩子分组计算金币变化
     const childBalanceChanges = {}
@@ -430,7 +428,6 @@ async function batchDeleteTransactions() {
       .from('transactions')
       .delete()
       .in('id', selectedTransactions.value)
-      .eq('user_id', user.id)
     
     if (deleteError) throw deleteError
     
@@ -635,6 +632,19 @@ async function loadTransactions() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
   
+  // 获取当前用户的所有孩子ID
+  const { data: userChildren } = await supabase
+    .from('children')
+    .select('id')
+    .eq('user_id', user.id)
+  
+  const childIds = userChildren?.map(c => c.id) || []
+  
+  if (childIds.length === 0) {
+    recentTransactions.value = []
+    return
+  }
+  
   const { data } = await supabase
     .from('transactions')
     .select(`
@@ -642,7 +652,7 @@ async function loadTransactions() {
       children(name),
       rules(name, icon)
     `)
-    .eq('user_id', user.id)
+    .in('child_id', childIds)
     .order('created_at', { ascending: false })
     .limit(10)
   
