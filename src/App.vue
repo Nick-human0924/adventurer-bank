@@ -1,5 +1,5 @@
 <template>
-  <div class="app">
+  <div class="app" :class="{ 'mobile-menu-open': isMobileMenuOpen }">
     <!-- 数据库警告条 -->
     <div v-if="showDbWarning || connectionError" class="db-warning-banner">
       <span class="warning-icon">⚠️</span>
@@ -11,33 +11,84 @@
       </a>
     </div>
     
-    <nav class="sidebar">
-      <div class="logo">
-        <h1>🏦 儿童行为银行</h1>
+    <!-- 移动端顶部导航栏 -->
+    <header v-if="isAuthenticated" class="mobile-header">
+      <button class="menu-toggle" @click="toggleMobileMenu">
+        <span class="hamburger">☰</span>
+      </button>
+      <div class="mobile-title">{{ currentRouteTitle }}</div>
+      <div class="mobile-user">
+        <button class="user-btn" @click="showUserMenu = !showUserMenu">
+          👤
+        </button>
+        <!-- 用户菜单下拉 -->
+        <div v-if="showUserMenu" class="user-dropdown">
+          <div class="user-email">{{ userEmail }}</div>
+          <button class="logout-btn" @click="handleLogout">
+            🚪 退出登录
+          </button>
+        </div>
       </div>
+    </header>
+    
+    <!-- 侧边栏（桌面端固定，移动端抽屉）-->
+    <nav v-if="isAuthenticated" class="sidebar" :class="{ 'mobile-drawer': isMobile }">
+      <div class="sidebar-header">
+        <div class="logo">
+          <h1>🏦 儿童行为银行</h1>
+        </div>
+        <!-- 移动端关闭按钮 -->
+        <button v-if="isMobile" class="close-drawer" @click="closeMobileMenu">
+          ✕
+        </button>
+      </div>
+      
       <ul class="nav-links">
-        <li v-for="route in routes" :key="route.path">
-          <router-link :to="route.path" :class="{ active: $route.path === route.path }">
+        <li v-for="route in authRoutes" :key="route.path">
+          <router-link 
+            :to="route.path" 
+            :class="{ active: $route.path === route.path }"
+            @click="isMobile ? closeMobileMenu() : null"
+          >
             <span class="icon">{{ route.meta.icon }}</span>
             <span class="title">{{ route.meta.title }}</span>
           </router-link>
         </li>
       </ul>
-      <div class="connection-status" :class="{ connected: isConnected }">
-        <span class="dot"></span>
-        {{ isConnected ? 'Supabase 已连接' : '连接中...' }}
-      </div>
-      <div class="version-badge">
-        <span class="version-label">版本</span>
-        <span class="version-number">v{{ appVersion }}</span>
+      
+      <div class="sidebar-footer">
+        <div class="connection-status" :class="{ connected: isConnected }">
+          <span class="dot"></span>
+          {{ isConnected ? '已连接' : '连接中...' }}
+        </div>        
+        
+        <div class="user-info">
+          <div class="user-email-truncate">{{ userEmail }}</div>
+          <button class="logout-btn" @click="handleLogout">
+            🚪 退出
+          </button>
+        </div>
+        
+        <div class="version-badge">
+          <span class="version-label">版本</span>
+          <span class="version-number">v{{ appVersion }}</span>
+        </div>
       </div>
     </nav>
     
-    <main class="main-content">
+    <!-- 移动端遮罩层 -->
+    <div 
+      v-if="isMobile && isMobileMenuOpen" 
+      class="drawer-overlay"
+      @click="closeMobileMenu"
+    ></div>
+    
+    <!-- 主内容区 -->
+    <main class="main-content" :class="{ 'auth-page': !isAuthenticated }">
       <router-view />
       
-      <!-- 全局版本号显示 -->
-      <div class="global-version-bar">
+      <!-- 全局版本号显示（仅在登录后显示）-->
+      <div v-if="isAuthenticated" class="global-version-bar">
         <div class="version-info">
           <span class="version-tag">🏦 儿童行为银行</span>
           <span class="version-divider">|</span>
@@ -47,8 +98,7 @@
           <span class="version-date">2026-03-22</span>
         </div>
         <div class="version-check">
-          <span v-if="appVersion === '2.0.0'" class="version-status success">✅ 已是最新版</span>
-          <span v-else class="version-status warning">⚠️ 需要刷新</span>
+          <span class="version-status success">✅ 已是最新版</span>
         </div>
       </div>
     </main>
@@ -57,19 +107,34 @@
 
 <script setup>
 import { ref, onMounted, computed, getCurrentInstance } from 'vue'
-import { useRoute } from 'vue-router'
-import { supabase, getDbStatus, initDatabase } from './utils/supabase.js'
+import { useRoute, useRouter } from 'vue-router'
+import { supabase, initDatabase } from './utils/supabase.js'
 import router from './router'
 
 const isConnected = ref(false)
 const connectionError = ref(false)
+const isMobile = ref(false)
+const isMobileMenuOpen = ref(false)
+const showUserMenu = ref(false)
+const isAuthenticated = ref(false)
+const userEmail = ref('')
 const $route = useRoute()
+const $router = useRouter()
 const { proxy } = getCurrentInstance()
 
 // 应用版本号
-const appVersion = '2.0.0'
+const appVersion = '3.0.0'
 
-const routes = computed(() => router.getRoutes())
+// 过滤需要认证的路由
+const authRoutes = computed(() => {
+  return router.getRoutes().filter(r => r.meta.requiresAuth)
+})
+
+// 当前路由标题
+const currentRouteTitle = computed(() => {
+  const route = authRoutes.value.find(r => r.path === $route.path)
+  return route?.meta?.title || '儿童行为银行'
+})
 
 // 数据库警告状态
 const showDbWarning = computed(() => {
@@ -78,8 +143,61 @@ const showDbWarning = computed(() => {
   return !status.checking && !status.connected
 })
 
+// 检查移动端
+function checkMobile() {
+  isMobile.value = window.innerWidth <= 768
+  if (!isMobile.value) {
+    isMobileMenuOpen.value = false
+  }
+}
+
+// 切换移动端菜单
+function toggleMobileMenu() {
+  isMobileMenuOpen.value = !isMobileMenuOpen.value
+}
+
+// 关闭移动端菜单
+function closeMobileMenu() {
+  isMobileMenuOpen.value = false
+}
+
+// 检查认证状态
+async function checkAuth() {
+  const { data: { session } } = await supabase.auth.getSession()
+  isAuthenticated.value = !!session
+  if (session?.user) {
+    userEmail.value = session.user.email
+  }
+}
+
+// 处理退出登录
+async function handleLogout() {
+  await supabase.auth.signOut()
+  isAuthenticated.value = false
+  userEmail.value = ''
+  showUserMenu.value = false
+  $router.push('/login')
+}
+
 onMounted(async () => {
-  // 5秒超时检查
+  // 检查认证状态
+  await checkAuth()
+  
+  // 监听认证状态变化
+  supabase.auth.onAuthStateChange((event, session) => {
+    isAuthenticated.value = !!session
+    if (session?.user) {
+      userEmail.value = session.user.email
+    } else {
+      userEmail.value = ''
+    }
+  })
+  
+  // 检查是否移动端
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  
+  // 数据库连接检查
   const timeoutId = setTimeout(() => {
     if (!isConnected.value) {
       connectionError.value = true
@@ -98,23 +216,29 @@ onMounted(async () => {
       isConnected.value = false
       connectionError.value = true
     }
-  } catch (e) {
+  } catch (error) {
     clearTimeout(timeoutId)
-    console.error('❌ 连接检查失败:', e)
-    isConnected.value = false
     connectionError.value = true
+    console.error('数据库初始化失败:', error)
   }
 })
 </script>
 
 <style>
+/* 基础布局 */
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* 数据库警告条 */
 .db-warning-banner {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
-  color: white;
+  background: linear-gradient(135deg, #ff416c, #ff4b2b);
+  color: #fff;
   padding: 12px 20px;
   display: flex;
   align-items: center;
@@ -134,61 +258,140 @@ onMounted(async () => {
 }
 
 .db-warning-banner .warning-link {
-  color: white;
+  color: #fff;
   text-decoration: underline;
   font-weight: 600;
   margin-left: 10px;
   padding: 4px 12px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   transition: background 0.3s;
 }
 
 .db-warning-banner .warning-link:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* 移动端顶部导航栏 */
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  align-items: center;
+  padding: 0 16px;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: #f5f7fa;
+.menu-toggle {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.3s;
 }
 
-.app {
+.menu-toggle:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+.mobile-title {
+  flex: 1;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.mobile-user {
+  position: relative;
+}
+
+.user-btn {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
   display: flex;
-  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
 }
 
+.user-dropdown {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 12px;
+  min-width: 180px;
+  z-index: 1001;
+}
+
+.user-email {
+  padding: 8px;
+  color: #495057;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #e9ecef;
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+
+/* 侧边栏 */
 .sidebar {
   width: 260px;
   background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #fff;
   padding: 20px 0;
   position: fixed;
   height: 100vh;
   display: flex;
   flex-direction: column;
+  z-index: 100;
 }
 
-.logo {
-  padding: 0 20px 30px;
+.sidebar-header {
+  padding: 0 20px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.close-drawer {
+  display: none;
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 4px;
 }
 
 .logo h1 {
   font-size: 1.4rem;
   font-weight: 600;
+  margin: 0;
 }
 
 .nav-links {
   list-style: none;
   padding: 20px 0;
   flex: 1;
+  overflow-y: auto;
 }
 
 .nav-links li {
@@ -208,7 +411,7 @@ body {
 .nav-links a:hover,
 .nav-links a.active {
   background: rgba(255,255,255,0.2);
-  color: white;
+  color: #fff;
 }
 
 .nav-links .icon {
@@ -216,14 +419,19 @@ body {
   margin-right: 12px;
 }
 
+.sidebar-footer {
+  padding: 15px;
+  border-top: 1px solid rgba(255,255,255,0.2);
+}
+
 .connection-status {
-  padding: 15px 20px;
-  margin: 0 15px;
+  padding: 10px 12px;
   background: rgba(0,0,0,0.2);
-  border-radius: 10px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  margin-bottom: 12px;
 }
 
 .connection-status .dot {
@@ -238,16 +446,47 @@ body {
   background: #51cf66;
 }
 
+.user-info {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 8px;
+}
+
+.user-email-truncate {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 8px;
+  background: rgba(255,255,255,0.2);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.logout-btn:hover {
+  background: rgba(255,255,255,0.3);
+}
+
 .version-badge {
-  margin: 10px 15px 0;
-  padding: 8px 12px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 20px;
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 6px;
   font-size: 0.8rem;
+  padding: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 20px;
 }
 
 .version-label {
@@ -260,6 +499,7 @@ body {
   font-family: 'Courier New', monospace;
 }
 
+/* 主内容区 */
 .main-content {
   flex: 1;
   margin-left: 260px;
@@ -267,6 +507,135 @@ body {
   min-height: 100vh;
 }
 
+.main-content.auth-page {
+  margin-left: 0;
+  padding: 0;
+}
+
+/* 全局版本号条 */
+.global-version-bar {
+  margin-top: 40px;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+  flex-wrap: wrap;
+}
+
+.version-tag {
+  font-weight: 600;
+}
+
+.version-divider {
+  opacity: 0.5;
+}
+
+.version-number {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+}
+
+.version-date {
+  opacity: 0.8;
+  font-size: 0.85rem;
+}
+
+.version-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.version-status.success {
+  background: #51cf66;
+  color: white;
+}
+
+/* 移动端遮罩层 */
+.drawer-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 99;
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .mobile-header {
+    display: flex;
+  }
+  
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    width: 280px;
+  }
+  
+  .sidebar.mobile-drawer {
+    transform: translateX(-100%);
+  }
+  
+  .app.mobile-menu-open .sidebar {
+    transform: translateX(0);
+  }
+  
+  .close-drawer {
+    display: block;
+  }
+  
+  .drawer-overlay {
+    display: block;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 76px 16px 16px;
+  }
+  
+  .main-content.auth-page {
+    padding: 0;
+  }
+  
+  .global-version-bar {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    margin-top: 24px;
+  }
+  
+  .version-info {
+    justify-content: center;
+  }
+  
+  .db-warning-banner {
+    position: relative;
+    flex-direction: column;
+    text-align: center;
+    padding: 16px;
+  }
+}
+
+/* 通用组件样式 */
 .card {
   background: white;
   border-radius: 16px;
@@ -299,7 +668,7 @@ body {
 
 .btn-primary {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #fff;
 }
 
 .btn-primary:hover {
@@ -309,12 +678,12 @@ body {
 
 .btn-success {
   background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-  color: white;
+  color: #fff;
 }
 
 .btn-danger {
   background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
-  color: white;
+  color: #fff;
 }
 
 input, select, textarea {
@@ -439,13 +808,14 @@ tr:hover {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
 }
 
 .modal {
   background: white;
   border-radius: 16px;
   padding: 30px;
-  width: 90%;
+  width: 100%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
@@ -471,82 +841,28 @@ tr:hover {
   color: #868e96;
 }
 
-/* 全局版本号显示条 */
-.global-version-bar {
-  margin-top: 40px;
-  padding: 16px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.version-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.95rem;
-}
-
-.version-tag {
-  font-weight: 600;
-}
-
-.version-divider {
-  opacity: 0.5;
-}
-
-.version-label {
-  opacity: 0.9;
-}
-
-.version-number {
-  background: rgba(255,255,255,0.2);
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-weight: 700;
-  font-family: 'Courier New', monospace;
-  font-size: 1rem;
-}
-
-.version-date {
-  opacity: 0.8;
-  font-size: 0.85rem;
-}
-
-.version-check {
-  font-size: 0.9rem;
-}
-
-.version-status {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-weight: 500;
-}
-
-.version-status.success {
-  background: #51cf66;
-  color: white;
-}
-
-.version-status.warning {
-  background: #ffd43b;
-  color: #333;
-}
-
+/* 移动端触控优化 */
 @media (max-width: 768px) {
-  .global-version-bar {
-    flex-direction: column;
-    gap: 12px;
-    text-align: center;
+  .btn {
+    min-height: 44px;
+    padding: 12px 20px;
   }
   
-  .version-info {
-    flex-wrap: wrap;
-    justify-content: center;
+  .nav-links a {
+    min-height: 48px;
+  }
+  
+  input, select, textarea {
+    font-size: 16px; /* 防止iOS缩放 */
+  }
+  
+  .modal {
+    padding: 20px;
+    margin: 10px;
+  }
+  
+  th, td {
+    padding: 12px;
   }
 }
 </style>
