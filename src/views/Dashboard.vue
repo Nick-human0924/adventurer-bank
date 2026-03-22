@@ -148,11 +148,44 @@
           </button>
         </div>
       </div>
+      
+      <!-- 筛选栏 -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label>孩子</label>
+          <select v-model="filterChildId">
+            <option value="">全部孩子</option>
+            <option v-for="child in children" :key="child.id" :value="child.id">
+              {{ child.avatar || '👶' }} {{ child.name }}
+            </option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>类型</label>
+          <select v-model="filterType">
+            <option value="">全部类型</option>
+            <option value="earn">获得金币</option>
+            <option value="spend">消费金币</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>从</label>
+          <input v-model="filterDateFrom" type="date">
+        </div>
+        <div class="filter-group">
+          <label>至</label>
+          <input v-model="filterDateTo" type="date">
+        </div>
+        <button class="btn btn-secondary filter-reset-btn" @click="resetFilters">
+          重置筛选
+        </button>
+      </div>
+      
       <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th v-if="recentTransactions.length > 0">
+              <th v-if="filteredTransactions.length > 0">
                 <input 
                   type="checkbox" 
                   :checked="isAllSelected"
@@ -169,7 +202,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="tx in recentTransactions" :key="tx.id">
+            <tr v-for="tx in filteredTransactions" :key="tx.id">
               <td>
                 <input 
                   type="checkbox" 
@@ -194,6 +227,9 @@
                   🗑️
                 </button>
               </td>
+            </tr>
+            <tr v-if="filteredTransactions.length === 0">
+              <td colspan="8" class="no-data">没有找到匹配的记录</td>
             </tr>
           </tbody>
         </table>
@@ -228,6 +264,16 @@
                 <span class="behavior-name">{{ rule.name }}</span>
                 <span class="behavior-points">+{{ rule.points }}</span>
               </button>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group half">
+              <label>日期</label>
+              <input v-model="behaviorDate" type="date" :max="today" class="date-input">
+            </div>
+            <div class="form-group half">
+              <label>时间</label>
+              <input v-model="behaviorTime" type="time" class="time-input">
             </div>
           </div>
           <div class="form-group">
@@ -289,8 +335,8 @@ const selectedTransactions = ref([])
 
 // 是否全选
 const isAllSelected = computed(() => {
-  return recentTransactions.value.length > 0 && 
-         selectedTransactions.value.length === recentTransactions.value.length
+  return filteredTransactions.value.length > 0 && 
+         selectedTransactions.value.length === filteredTransactions.value.length
 })
 
 // 切换全选
@@ -298,7 +344,7 @@ function toggleSelectAll() {
   if (isAllSelected.value) {
     selectedTransactions.value = []
   } else {
-    selectedTransactions.value = recentTransactions.value.map(tx => tx.id)
+    selectedTransactions.value = filteredTransactions.value.map(tx => tx.id)
   }
 }
 
@@ -1529,5 +1575,105 @@ onUnmounted(() => {
 .btn-icon.delete:hover {
   background: #ff6b6b;
   color: white;
+}
+
+/* 筛选栏样式 */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #495057;
+}
+
+.filter-group select,
+.filter-group input {
+  padding: 8px 12px;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: white;
+  min-width: 120px;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+  border-color: #667eea;
+  outline: none;
+}
+
+.filter-reset-btn {
+  height: fit-content;
+  padding: 9px 16px;
+}
+
+/* 表格无数据提示 */
+.no-data {
+  text-align: center;
+  color: #868e96;
+  padding: 40px;
+  font-style: italic;
+}
+
+/* 行为弹窗日期时间输入框样式 */
+.form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-group.half {
+  flex: 1;
+}
+
+.date-input,
+.time-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.date-input:focus,
+.time-input:focus {
+  border-color: #667eea;
+  outline: none;
+}
+
+@media (max-width: 768px) {
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .filter-group {
+    width: 100%;
+  }
+  
+  .filter-group select,
+  .filter-group input {
+    width: 100%;
+  }
+  
+  .form-row {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 </style>
