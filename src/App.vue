@@ -35,6 +35,22 @@
     
     <main class="main-content">
       <router-view />
+      
+      <!-- 全局版本号显示 -->
+      <div class="global-version-bar">
+        <div class="version-info">
+          <span class="version-tag">🏦 儿童行为银行</span>
+          <span class="version-divider">|</span>
+          <span class="version-label">当前版本</span>
+          <span class="version-number">v{{ appVersion }}</span>
+          <span class="version-divider">|</span>
+          <span class="version-date">2026-03-22</span>
+        </div>
+        <div class="version-check">
+          <span v-if="appVersion === '2.0.0'" class="version-status success">✅ 已是最新版</span>
+          <span v-else class="version-status warning">⚠️ 需要刷新</span>
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -51,7 +67,7 @@ const $route = useRoute()
 const { proxy } = getCurrentInstance()
 
 // 应用版本号
-const appVersion = '1.0.2'
+const appVersion = '2.0.0'
 
 const routes = computed(() => router.getRoutes())
 
@@ -453,5 +469,84 @@ tr:hover {
   font-size: 1.5rem;
   cursor: pointer;
   color: #868e96;
+}
+
+/* 全局版本号显示条 */
+.global-version-bar {
+  margin-top: 40px;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.version-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.95rem;
+}
+
+.version-tag {
+  font-weight: 600;
+}
+
+.version-divider {
+  opacity: 0.5;
+}
+
+.version-label {
+  opacity: 0.9;
+}
+
+.version-number {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+}
+
+.version-date {
+  opacity: 0.8;
+  font-size: 0.85rem;
+}
+
+.version-check {
+  font-size: 0.9rem;
+}
+
+.version-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.version-status.success {
+  background: #51cf66;
+  color: white;
+}
+
+.version-status.warning {
+  background: #ffd43b;
+  color: #333;
+}
+
+@media (max-width: 768px) {
+  .global-version-bar {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+  
+  .version-info {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }
 </style>
