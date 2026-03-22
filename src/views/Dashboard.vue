@@ -137,6 +137,7 @@
     <!-- 最近行为记录 -->
     <div class="card">
       <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <span>📝 最近行为记录</span>
         <div class="batch-actions" v-if="selectedTransactions.length > 0">
           <span class="selected-count">已选 {{ selectedTransactions.length }} 条</span>
@@ -148,11 +149,40 @@
           </button>
         </div>
       </div>
+      
+      <!-- 筛选器 -->
+      <div class="filter-bar" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+        <div class="filter-item">
+          <label>孩子:</label>
+          <select v-model="filterChildId" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+            <option value="">全部</option>
+            <option v-for="child in children" :key="child.id" :value="child.id">{{ child.name }}</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label>类型:</label>
+          <select v-model="filterType" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+            <option value="">全部</option>
+            <option value="earn">获得</option>
+            <option value="spend">消费</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <label>日期从:</label>
+          <input v-model="filterDateFrom" type="date" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+        </div>
+        <div class="filter-item">
+          <label>到:</label>
+          <input v-model="filterDateTo" type="date" style="padding: 5px 10px; border-radius: 4px; border: 1px solid #ddd;">
+        </div>
+        <button class="btn btn-secondary" @click="resetFilters" style="padding: 5px 15px;">重置</button>
+      </div>
+      
       <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th v-if="recentTransactions.length > 0">
+              <th v-if="filteredTransactions.length > 0">
                 <input 
                   type="checkbox" 
                   :checked="isAllSelected"
@@ -169,7 +199,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="tx in recentTransactions" :key="tx.id">
+            <tr v-for="tx in filteredTransactions" :key="tx.id">
               <td>
                 <input 
                   type="checkbox" 
@@ -230,6 +260,16 @@
               </button>
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>日期</label>
+              <input v-model="behaviorDate" type="date" :max="today">
+            </div>
+            <div class="form-group">
+              <label>时间</label>
+              <input v-model="behaviorTime" type="time">
+            </div>
+          </div>
           <div class="form-group">
             <label>备注（可选）</label>
             <input v-model="behaviorNote" type="text" placeholder="添加备注...">
@@ -287,10 +327,42 @@ const recordMessage = ref(null)
 // 选中的交易记录（用于批量删除）
 const selectedTransactions = ref([])
 
+// 筛选状态
+const filterChildId = ref('')
+const filterType = ref('')
+const filterDateFrom = ref('')
+const filterDateTo = ref('')
+
+// 筛选后的交易记录
+const filteredTransactions = computed(() => {
+  return recentTransactions.value.filter(tx => {
+    // 孩子筛选
+    if (filterChildId.value && tx.child_id !== filterChildId.value) return false
+    
+    // 类型筛选
+    if (filterType.value && tx.type !== filterType.value) return false
+    
+    // 日期范围筛选
+    const txDate = new Date(tx.created_at).toISOString().split('T')[0]
+    if (filterDateFrom.value && txDate < filterDateFrom.value) return false
+    if (filterDateTo.value && txDate > filterDateTo.value) return false
+    
+    return true
+  })
+})
+
+// 重置筛选
+function resetFilters() {
+  filterChildId.value = ''
+  filterType.value = ''
+  filterDateFrom.value = ''
+  filterDateTo.value = ''
+}
+
 // 是否全选
 const isAllSelected = computed(() => {
-  return recentTransactions.value.length > 0 && 
-         selectedTransactions.value.length === recentTransactions.value.length
+  return filteredTransactions.value.length > 0 && 
+         selectedTransactions.value.length === filteredTransactions.value.length
 })
 
 // 切换全选
@@ -298,7 +370,7 @@ function toggleSelectAll() {
   if (isAllSelected.value) {
     selectedTransactions.value = []
   } else {
-    selectedTransactions.value = recentTransactions.value.map(tx => tx.id)
+    selectedTransactions.value = filteredTransactions.value.map(tx => tx.id)
   }
 }
 
@@ -432,7 +504,12 @@ const bankTitle = computed(() => {
 const showAddBehaviorModal = ref(false)
 const selectedBehavior = ref(null)
 const behaviorNote = ref('')
+const behaviorDate = ref(new Date().toISOString().split('T')[0])
+const behaviorTime = ref(new Date().toTimeString().slice(0, 5))
 const addingBehavior = ref(false)
+
+// 今天的日期（用于日期选择器max属性）
+const today = computed(() => new Date().toISOString().split('T')[0])
 
 // 关联的任务
 const linkedTasks = computed(() => {
@@ -645,6 +722,9 @@ async function addBehavior() {
   addingBehavior.value = true
   const child = children.value.find(c => c.id === selectedChildId.value)
   
+  // 构建选择的日期时间
+  const selectedDateTime = new Date(`${behaviorDate.value}T${behaviorTime.value}`)
+  
   try {
     // 1. 创建交易记录
     const { data: tx, error: txError } = await supabase.from('transactions').insert({
@@ -652,7 +732,8 @@ async function addBehavior() {
       points: selectedBehavior.value.points,
       type: 'earn',
       note: behaviorNote.value || selectedBehavior.value.name,
-      rule_id: selectedBehavior.value.id
+      rule_id: selectedBehavior.value.id,
+      created_at: selectedDateTime.toISOString()
     }).select().single()
     
     if (txError) throw txError
@@ -671,7 +752,7 @@ async function addBehavior() {
         // 更新为已完成
         await supabase.from('task_progress').update({
           status: 'completed',
-          completed_at: new Date().toISOString(),
+          completed_at: selectedDateTime.toISOString(),
           current_count: (progress.current_count || 0) + 1
         }).eq('id', progress.id)
         
@@ -691,6 +772,8 @@ async function addBehavior() {
     showAddBehaviorModal.value = false
     selectedBehavior.value = null
     behaviorNote.value = ''
+    behaviorDate.value = new Date().toISOString().split('T')[0]
+    behaviorTime.value = new Date().toTimeString().slice(0, 5)
     
     await refreshData()
   } catch (error) {
