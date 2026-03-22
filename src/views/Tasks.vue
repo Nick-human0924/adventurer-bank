@@ -95,18 +95,20 @@
             <div 
               v-for="child in task.children" 
               :key="child.id"
-              :class="['assignee', { completed: child.completed }]"
+              :class="['assignee', { 
+                completed: task.type === 'streak' ? isTodayCompleted(task, child.id) : child.completed 
+              }]"
             >
               <span class="avatar">{{ child.avatar || '👶' }}</span>
               <span class="name">{{ child.name }}</span>
               <button 
-                v-if="!child.completed"
+                v-if="task.type === 'streak' ? !isTodayCompleted(task, child.id) : !child.completed"
                 class="btn-complete"
                 @click="completeTask(task, child)"
               >
-                完成
+                {{ task.type === 'streak' ? '打卡' : '完成' }}
               </button>
-              <span v-else class="completed-badge">✅</span>
+              <span v-else class="completed-badge">{{ task.type === 'streak' ? '今日已打卡 ✅' : '✅' }}</span>
             </div>
           </div>
 
@@ -717,6 +719,16 @@ function closeModal() {
     start_date: '',
     duration_days: 7
   }
+}
+
+// 检查今天是否已打卡（连续挑战）
+function isTodayCompleted(task, childId) {
+  if (!task.progress) return false
+  const today = new Date().toISOString().split('T')[0]
+  const todayProgress = task.progress.find(p => 
+    p.child_id === childId && p.progress_date === today
+  )
+  return todayProgress?.completed || false
 }
 
 // 格式化日期
