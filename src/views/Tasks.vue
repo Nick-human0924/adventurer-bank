@@ -750,7 +750,25 @@ async function loadTasks() {
         let todayCompletions = {}
         
         if (task.linked_rule_ids?.length > 0) {
-          console.log(`    查询 ${task.linked_rule_ids.length} 个规则...`)
+          console.log(`    查询 ${task.linked_rule_ids.length} 个规则...`, task.linked_rule_ids)
+          console.log(`    当前用户ID:`, user.id)
+          
+          // 先查询所有规则（不带用户过滤）看看是否存在
+          const { data: allRules, error: allError } = await supabase
+            .from('rules')
+            .select('id, name, user_id')
+            .in('id', task.linked_rule_ids)
+          
+          if (allError) {
+            console.error('    查询所有规则失败:', allError)
+          } else {
+            console.log(`    数据库中找到 ${allRules?.length || 0} 个规则:`)
+            allRules?.forEach(r => {
+              console.log(`      - ${r.name} (${r.id}): 用户=${r.user_id}`)
+            })
+          }
+          
+          // 再按用户过滤查询
           const { data: rules, error: rulesError } = await supabase
             .from('rules')
             .select('*')
@@ -758,10 +776,10 @@ async function loadTasks() {
             .eq('user_id', user.id)
           
           if (rulesError) {
-            console.error('    查询规则失败:', rulesError)
+            console.error('    查询用户规则失败:', rulesError)
           } else {
             linkedRules = rules || []
-            console.log(`    找到 ${linkedRules.length} 个规则`)
+            console.log(`    用户权限过滤后找到 ${linkedRules.length} 个规则`)
           }
           
           // 查询今日每个规则的完成状态
