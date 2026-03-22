@@ -27,6 +27,10 @@
         <span class="dot"></span>
         {{ isConnected ? 'Supabase 已连接' : '连接中...' }}
       </div>
+      <div class="version-badge">
+        <span class="version-label">版本</span>
+        <span class="version-number">v{{ appVersion }}</span>
+      </div>
     </nav>
     
     <main class="main-content">
@@ -45,6 +49,9 @@ const isConnected = ref(false)
 const connectionError = ref(false)
 const $route = useRoute()
 const { proxy } = getCurrentInstance()
+
+// 应用版本号
+const appVersion = '1.0.2'
 
 const routes = computed(() => router.getRoutes())
 
@@ -213,6 +220,28 @@ body {
 
 .connection-status.connected .dot {
   background: #51cf66;
+}
+
+.version-badge {
+  margin: 10px 15px 0;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+}
+
+.version-label {
+  color: rgba(255,255,255,0.7);
+}
+
+.version-number {
+  color: #ffd43b;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
 }
 
 .main-content {
