@@ -35,11 +35,11 @@
           <label>👶 选择孩子：</label>
           <select v-model="selectedChildId" v-if="children.length > 1">
             <option v-for="child in children" :key="child.id" :value="child.id">
-              {{ child.avatar || '👶' }} {{ child.name }} ({{ child.current_balance }}金币)
+              {{ child.avatar || '👶' }} {{ child.name }} ({{ child.current_balance }}💰 {{ child.gem_balance || 0 }}💎)
             </option>
           </select>
           <span v-else-if="children.length === 1" class="single-child">
-            {{ children[0].avatar || '👶' }} {{ children[0].name }}
+            {{ children[0].avatar || '👶' }} {{ children[0].name }} ({{ children[0].current_balance }}💰 {{ children[0].gem_balance || 0 }}💎)
           </span>
           <span v-else class="no-child">请先添加孩子</span>
         </div>
