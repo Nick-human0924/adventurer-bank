@@ -1,12 +1,12 @@
 <template>
   <div class="app">
     <!-- 数据库警告条 -->
-    <div v-if="showDbWarning" class="db-warning-banner">
+    <div v-if="showDbWarning || connectionError" class="db-warning-banner">
       <span class="warning-icon">⚠️</span>
       <span class="warning-text">
-        数据库未初始化！请前往 Supabase 控制台运行 init_database.sql 脚本
+        {{ connectionError ? '数据库连接失败，请检查网络或配置' : '数据库未初始化！请前往 Supabase 控制台运行 init_database.sql 脚本' }}
       </span>
-      <a href="https://supabase.com/dashboard/project/agkemugaxhrsnbyiluw/sql/new" target="_blank" class="warning-link">
+      <a v-if="!connectionError" href="https://supabase.com/dashboard/project/agkemugaxhrsnbyiluw/sql/new" target="_blank" class="warning-link">
         打开 SQL Editor →
       </a>
     </div>
@@ -38,10 +38,11 @@
 <script setup>
 import { ref, onMounted, computed, getCurrentInstance } from 'vue'
 import { useRoute } from 'vue-router'
-import { supabase, getDbStatus } from './utils/supabase.js'
+import { supabase, getDbStatus, initDatabase } from './utils/supabase.js'
 import router from './router'
 
 const isConnected = ref(false)
+const connectionError = ref(false)
 const $route = useRoute()
 const { proxy } = getCurrentInstance()
 
@@ -49,20 +50,36 @@ const routes = computed(() => router.getRoutes())
 
 // 数据库警告状态
 const showDbWarning = computed(() => {
-  if (!proxy.$dbStatus) return false
+  if (!proxy.$dbStatus) return connectionError.value
   const status = proxy.$dbStatus.value
   return !status.checking && !status.connected
 })
 
 onMounted(async () => {
+  // 5秒超时检查
+  const timeoutId = setTimeout(() => {
+    if (!isConnected.value) {
+      connectionError.value = true
+      console.error('❌ 数据库连接超时')
+    }
+  }, 5000)
+  
   try {
-    const { data, error } = await supabase.from('children').select('count')
-    if (!error) {
+    const result = await initDatabase()
+    clearTimeout(timeoutId)
+    
+    if (result.success) {
       isConnected.value = true
+      connectionError.value = false
+    } else {
+      isConnected.value = false
+      connectionError.value = true
     }
   } catch (e) {
-    console.log('连接检查:', e)
+    clearTimeout(timeoutId)
+    console.error('❌ 连接检查失败:', e)
     isConnected.value = false
+    connectionError.value = true
   }
 })
 </script>
