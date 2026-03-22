@@ -133,21 +133,47 @@
     
     <!-- 最近行为记录 -->
     <div class="card">
-      <div class="card-title">📝 最近行为记录</div>
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <span>📝 最近行为记录</span>
+        <div class="batch-actions" v-if="selectedTransactions.length > 0">
+          <span class="selected-count">已选 {{ selectedTransactions.length }} 条</span>
+          <button class="btn btn-danger" @click="batchDeleteTransactions">
+            🗑️ 批量删除
+          </button>
+          <button class="btn btn-secondary" @click="selectedTransactions = []">
+            取消
+          </button>
+        </div>
+      </div>
       <div class="table-container">
         <table>
           <thead>
             <tr>
+              <th v-if="recentTransactions.length > 0">
+                <input 
+                  type="checkbox" 
+                  :checked="isAllSelected"
+                  @change="toggleSelectAll"
+                />
+              </th>
               <th>时间</th>
               <th>孩子</th>
               <th>行为</th>
               <th>金币</th>
               <th>类型</th>
               <th>备注</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="tx in recentTransactions" :key="tx.id">
+              <td>
+                <input 
+                  type="checkbox" 
+                  :value="tx.id"
+                  v-model="selectedTransactions"
+                />
+              </td>
               <td>{{ formatDate(tx.created_at) }}</td>
               <td>{{ tx.child_name }}</td>
               <td>{{ tx.rule_name }}</td>
@@ -160,6 +186,11 @@
                 </span>
               </td>
               <td>{{ tx.note || '-' }}</td>
+              <td>
+                <button class="btn-icon delete" @click="deleteTransaction(tx)" title="删除">
+                  🗑️
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -249,6 +280,140 @@ const recentTransactions = ref([])
 const tasks = ref([])
 const selectedChildId = ref('')
 const recordMessage = ref(null)
+
+// 选中的交易记录（用于批量删除）
+const selectedTransactions = ref([])
+
+// 是否全选
+const isAllSelected = computed(() => {
+  return recentTransactions.value.length > 0 && 
+         selectedTransactions.value.length === recentTransactions.value.length
+})
+
+// 切换全选
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedTransactions.value = []
+  } else {
+    selectedTransactions.value = recentTransactions.value.map(tx => tx.id)
+  }
+}
+
+// 删除单条交易记录
+async function deleteTransaction(tx) {
+  if (!confirm(`确定要删除这条行为记录吗？\n\n${tx.child_name} - ${tx.rule_name} ${tx.type === 'earn' ? '+' : '-'}${tx.points}金币`)) {
+    return
+  }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('未登录')
+    
+    // 1. 删除交易记录
+    const { error: txError } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', tx.id)
+      .eq('user_id', user.id)
+    
+    if (txError) throw txError
+    
+    // 2. 更新孩子金币（回退）
+    const pointChange = tx.type === 'earn' ? -tx.points : tx.points
+    const { data: child } = await supabase
+      .from('children')
+      .select('current_balance, total_points')
+      .eq('id', tx.child_id)
+      .single()
+    
+    if (child) {
+      await supabase
+        .from('children')
+        .update({
+          current_balance: Math.max(0, child.current_balance + pointChange),
+          total_points: Math.max(0, child.total_points + pointChange)
+        })
+        .eq('id', tx.child_id)
+    }
+    
+    recordMessage.value = { type: 'success', text: '✅ 记录已删除，金币已回退' }
+    await refreshData()
+  } catch (error) {
+    console.error('删除记录失败:', error)
+    recordMessage.value = { type: 'error', text: '删除失败: ' + error.message }
+  }
+  
+  setTimeout(() => recordMessage.value = null, 3000)
+}
+
+// 批量删除交易记录
+async function batchDeleteTransactions() {
+  if (selectedTransactions.value.length === 0) return
+  
+  if (!confirm(`确定要删除选中的 ${selectedTransactions.value.length} 条行为记录吗？\n\n此操作不可恢复，孩子的金币将相应回退。`)) {
+    return
+  }
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('未登录')
+    
+    // 获取要删除的记录详情
+    const { data: txsToDelete } = await supabase
+      .from('transactions')
+      .select('*')
+      .in('id', selectedTransactions.value)
+      .eq('user_id', user.id)
+    
+    // 按孩子分组计算金币变化
+    const childBalanceChanges = {}
+    for (const tx of (txsToDelete || [])) {
+      if (!childBalanceChanges[tx.child_id]) {
+        childBalanceChanges[tx.child_id] = { current: 0, total: 0 }
+      }
+      const change = tx.type === 'earn' ? -tx.points : tx.points
+      childBalanceChanges[tx.child_id].current += change
+      childBalanceChanges[tx.child_id].total += change
+    }
+    
+    // 删除交易记录
+    const { error: deleteError } = await supabase
+      .from('transactions')
+      .delete()
+      .in('id', selectedTransactions.value)
+      .eq('user_id', user.id)
+    
+    if (deleteError) throw deleteError
+    
+    // 更新每个孩子的金币
+    for (const [childId, changes] of Object.entries(childBalanceChanges)) {
+      const { data: child } = await supabase
+        .from('children')
+        .select('current_balance, total_points')
+        .eq('id', childId)
+        .single()
+      
+      if (child) {
+        await supabase
+          .from('children')
+          .update({
+            current_balance: Math.max(0, child.current_balance + changes.current),
+            total_points: Math.max(0, child.total_points + changes.total)
+          })
+          .eq('id', childId)
+      }
+    }
+    
+    selectedTransactions.value = []
+    recordMessage.value = { type: 'success', text: `✅ 已删除 ${txsToDelete?.length || 0} 条记录，金币已回退` }
+    await refreshData()
+  } catch (error) {
+    console.error('批量删除失败:', error)
+    recordMessage.value = { type: 'error', text: '批量删除失败: ' + error.message }
+  }
+  
+  setTimeout(() => recordMessage.value = null, 3000)
+}
 
 // 银行标题
 const bankTitle = computed(() => {
@@ -1230,5 +1395,67 @@ onUnmounted(() => {
   .behavior-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* 批量操作 */
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.selected-count {
+  font-size: 0.9rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.btn-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(255, 65, 108, 0.4);
+}
+
+.btn-secondary {
+  background: #e9ecef;
+  color: #495057;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.btn-secondary:hover {
+  background: #dee2e6;
+}
+
+/* 删除按钮 */
+.btn-icon.delete {
+  background: #ffe3e3;
+  color: #c92a2a;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.btn-icon.delete:hover {
+  background: #ff6b6b;
+  color: white;
 }
 </style>

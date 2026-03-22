@@ -108,7 +108,7 @@ const $router = useRouter()
 const { proxy } = getCurrentInstance()
 
 // 应用版本号
-const appVersion = '3.1.1'
+const appVersion = '3.1.2'
 
 // 过滤需要认证的路由
 const authRoutes = computed(() => {

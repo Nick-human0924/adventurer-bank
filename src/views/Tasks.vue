@@ -961,23 +961,49 @@ async function claimReward(task) {
   
   claimingTask.value = task.id
   try {
-    // 调用数据库函数发放奖励
-    const { data, error } = await supabase
-      .rpc('award_task_reward', {
-        p_task_id: task.id,
-        p_child_id: task.progress.child_id
-      })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('未登录')
     
-    if (error) throw error
+    const rewardPoints = task.reward_points || 0
+    const childId = task.progress.child_id
     
-    const result = JSON.parse(data)
+    // 1. 创建交易记录（奖励金币）
+    const { error: txError } = await supabase.from('transactions').insert({
+      child_id: childId,
+      points: rewardPoints,
+      type: 'earn',
+      note: `完成任务：${task.title}`,
+      rule_id: null,
+      user_id: user.id
+    })
     
-    if (result.success) {
-      alert(`🎉 ${result.message}！获得 ${result.points_awarded} 金币`)
-      await loadTasks()
-    } else {
-      alert(result.message)
+    if (txError) throw txError
+    
+    // 2. 更新孩子的金币
+    const { data: child } = await supabase
+      .from('children')
+      .select('current_balance, total_points')
+      .eq('id', childId)
+      .single()
+    
+    if (child) {
+      await supabase
+        .from('children')
+        .update({
+          current_balance: child.current_balance + rewardPoints,
+          total_points: child.total_points + rewardPoints
+        })
+        .eq('id', childId)
     }
+    
+    // 3. 更新任务进度为已领取
+    await supabase
+      .from('task_progress')
+      .update({ reward_claimed: true })
+      .eq('id', task.progress.id)
+    
+    alert(`🎉 恭喜！任务"${task.title}"完成！获得 ${rewardPoints} 金币`)
+    await loadTasks()
   } catch (error) {
     console.error('领取奖励失败:', error)
     alert('领取失败: ' + error.message)
