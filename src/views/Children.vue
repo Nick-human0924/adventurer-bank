@@ -21,13 +21,13 @@
         <div class="level-badge">
           <span class="level-text">LV.{{ getLevel(child.total_points) }}</span>
         </div>
-        
+
         <!-- 英雄头像区域 -->
         <div class="hero-avatar-section">
           <div class="hero-avatar">
-            <img 
-              v-if="child.avatar && child.avatar.startsWith('data:')" 
-              :src="child.avatar" 
+            <img
+              v-if="child.avatar && child.avatar.startsWith('data:')"
+              :src="child.avatar"
               class="avatar-image"
               alt="头像"
             />
@@ -37,7 +37,7 @@
           <h3 class="hero-name">{{ child.name }}</h3>
           <div class="hero-title">{{ getTitle(child.total_points) }}</div>
         </div>
-        
+
         <!-- 金币与进度 -->
         <div class="hero-stats">
           <div class="stat-row">
@@ -58,7 +58,7 @@
               <span class="stat-value total">{{ child.total_points }}</span>
             </div>
           </div>
-          
+
           <!-- 进度条 -->
           <div class="level-progress">
             <div class="progress-header">
@@ -72,7 +72,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 徽章预览 -->
         <div class="badges-preview">
           <div class="badges-header">
@@ -81,8 +81,8 @@
           </div>
           <div class="badges-row">
             <template v-if="getChildBadges(child).length > 0">
-              <div 
-                v-for="(badge, index) in getChildBadges(child).slice(0, 3)" 
+              <div
+                v-for="(badge, index) in getChildBadges(child).slice(0, 3)"
                 :key="badge.id"
                 class="badge-item"
                 :class="{ unlocked: badge.unlocked }"
@@ -99,7 +99,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 快捷操作 -->
         <div class="hero-actions">
           <button class="action-btn edit" @click="editChild(child)" title="编辑">
@@ -127,7 +127,7 @@
         </div>
         <h3>还没有小英雄</h3>
         <p>召唤第一个孩子，开始你们的冒险之旅！</p>
-        
+
         <button class="btn btn-primary empty-add-btn" @click="showAddModal = true">
           <span>✨ 召唤第一个英雄</span>
         </button>
@@ -147,10 +147,10 @@
           </div>
           <button class="close-btn" @click="closeAchievements">×</button>
         </div>
-        
+
         <div class="achievements-grid">
-          <div 
-            v-for="badge in allBadges" 
+          <div
+            v-for="badge in allBadges"
             :key="badge.id"
             class="achievement-card"
             :class="{ unlocked: isBadgeUnlocked(selectedChild, badge) }"
@@ -161,7 +161,7 @@
             </div>
             <h4>{{ badge.name }}</h4>
             <p>{{ badge.description }}</p>
-            
+
             <div class="achievement-requirement">
               <span v-if="isBadgeUnlocked(selectedChild, badge)">✅ 已获得</span>
               <span v-else>🔒 需要 {{ badge.requirement }} 分</span>
@@ -178,16 +178,16 @@
           <h3>{{ isEditing ? '✏️ 编辑英雄' : '✨ 召唤新英雄' }}</h3>
           <button class="close-btn" @click="closeModal">×</button>
         </div>
-        
+
         <div class="modal-body">
           <div class="form-group">
             <label>📝 英雄姓名</label>
             <input v-model="form.name" type="text" placeholder="请输入孩子姓名" />
           </div>
-          
+
           <div class="form-group">
             <label>🎨 选择头像</label>
-            
+
             <!-- 自定义头像上传 -->
             <div class="custom-avatar-upload">
               <div class="avatar-preview" v-if="form.avatar && !form.avatar.startsWith('👶')">
@@ -199,12 +199,12 @@
                 <span>📷 上传照片</span>
               </label>
             </div>
-            
+
             <div class="avatar-divider"><span>或选择表情</span></div>
-            
+
             <div class="avatar-selector">
-              <span 
-                v-for="avatar in avatars" 
+              <span
+                v-for="avatar in avatars"
                 :key="avatar"
                 class="avatar-option"
                 :class="{ active: form.avatar === avatar }"
@@ -214,13 +214,13 @@
               </span>
             </div>
           </div>
-          
+
           <div class="form-group">
             <label>💎 初始金币</label>
             <input v-model.number="form.current_balance" type="number" min="0" />
           </div>
         </div>
-        
+
         <div class="modal-footer">
           <button class="btn" @click="closeModal">取消</button>
           <button class="btn btn-primary" @click="saveChild" :disabled="!form.name">
@@ -229,7 +229,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 快速加分弹窗 -->
     <div v-if="showQuickAddModal" class="modal-overlay" @click.self="closeQuickAddModal">
       <div class="modal quick-add-modal">
@@ -237,11 +237,11 @@
           <h3>⚡ 快速加分 - {{ quickAddChild?.name }}</h3>
           <button class="close-btn" @click="closeQuickAddModal">×</button>
         </div>
-        
+
         <div class="modal-body">
           <div class="quick-add-grid">
-            <button 
-              v-for="action in quickAddActions" 
+            <button
+              v-for="action in quickAddActions"
               :key="action.id"
               class="quick-add-btn"
               :class="action.color"
@@ -255,7 +255,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 提示消息 -->
     <div v-if="message" :class="['toast-message', message.type]">
       <span class="toast-icon">{{ message.type === 'success' ? '✅' : '❌' }}</span>
@@ -357,9 +357,9 @@ function getLevelProgress(totalPoints) {
   const currentLevel = getLevel(totalPoints)
   const levelInfo = levels.find(l => l.level === currentLevel)
   const nextLevel = levels.find(l => l.level === currentLevel + 1)
-  
+
   if (!nextLevel) return 100
-  
+
   const range = nextLevel.min - levelInfo.min
   const progress = totalPoints - levelInfo.min
   return Math.min(100, Math.max(0, (progress / range) * 100))
@@ -406,46 +406,55 @@ async function loadChildren() {
     .from('children')
     .select('*')
     .order('total_points', { ascending: false })
-  
+
   if (error) {
     console.error('加载孩子失败:', error)
     return
   }
-  
-  // 实时计算每个孩子的金币余额和累计金币
-  const childrenWithBalance = await Promise.all(
-    (data || []).map(async (child) => {
-      // 计算该孩子的所有交易记录
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('type, points')
-        .eq('child_id', child.id)
-      
-      const earned = transactions
-        ?.filter(t => t.type === 'earn')
-        ?.reduce((sum, t) => sum + t.points, 0) || 0
-      const spent = transactions
-        ?.filter(t => t.type === 'spend')
-        ?.reduce((sum, t) => sum + t.points, 0) || 0
-      
-      return {
-        ...child,
-        current_balance: earned - spent, // 当前余额
-        total_points: earned // 累计获得的金币
+
+  // 批量获取所有孩子的交易记录（一次性查询）
+  const childIds = (data || []).map(c => c.id)
+  let transactionsMap = {}
+
+  if (childIds.length > 0) {
+    const { data: allTransactions } = await supabase
+      .from('transactions')
+      .select('child_id, type, points')
+      .in('child_id', childIds)
+
+    // 按孩子ID分组
+    allTransactions?.forEach(tx => {
+      if (!transactionsMap[tx.child_id]) {
+        transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
+      }
+      if (tx.type === 'earn') {
+        transactionsMap[tx.child_id].earned += tx.points
+      } else {
+        transactionsMap[tx.child_id].spent += tx.points
       }
     })
-  )
-  
+  }
+
+  // 合并数据
+  const childrenWithBalance = (data || []).map(child => {
+    const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
+    return {
+      ...child,
+      current_balance: tx.earned - tx.spent,
+      total_points: tx.earned
+    }
+  })
+
   children.value = childrenWithBalance
 }
 
 // 保存孩子
 async function saveChild() {
   if (!form.value.name) return
-  
+
   const user = await supabase.auth.getUser()
   const user_id = user.data.user?.id
-  
+
   if (isEditing.value) {
     const { error } = await supabase
       .from('children')
@@ -455,7 +464,7 @@ async function saveChild() {
         current_balance: form.value.current_balance
       })
       .eq('id', editingId.value)
-    
+
     if (error) {
       showMessage('error', '保存失败: ' + error.message)
       return
@@ -471,14 +480,14 @@ async function saveChild() {
         total_points: form.value.current_balance,
         user_id: user_id
       }])
-    
+
     if (error) {
       showMessage('error', '添加失败: ' + error.message)
       return
     }
     showMessage('success', `✨ ${form.value.name} 已加入英雄殿堂！`)
   }
-  
+
   closeModal()
   loadChildren()
 }
@@ -498,17 +507,17 @@ function editChild(child) {
 // 删除孩子
 async function deleteChild(id) {
   if (!confirm('确定要删除这个英雄吗？所有相关记录也会被删除。')) return
-  
+
   const { error } = await supabase
     .from('children')
     .delete()
     .eq('id', id)
-  
+
   if (error) {
     showMessage('error', '删除失败: ' + error.message)
     return
   }
-  
+
   showMessage('success', '英雄已离开殿堂')
   loadChildren()
 }
@@ -529,13 +538,13 @@ function closeQuickAddModal() {
 function handleAvatarUpload(event) {
   const file = event.target.files[0]
   if (!file) return
-  
+
   // 检查文件大小（限制 2MB）
   if (file.size > 2 * 1024 * 1024) {
     showMessage('error', '图片大小不能超过 2MB')
     return
   }
-  
+
   const reader = new FileReader()
   reader.onload = (e) => {
     form.value.avatar = e.target.result
@@ -546,7 +555,7 @@ function handleAvatarUpload(event) {
 // 确认快速加分
 async function confirmQuickAdd(action) {
   if (!quickAddChild.value) return
-  
+
   const { error } = await supabase.from('transactions').insert({
     child_id: quickAddChild.value.id,
     points: action.points,
@@ -554,16 +563,16 @@ async function confirmQuickAdd(action) {
     note: action.name,
     rule_id: null
   })
-  
+
   if (error) {
     showMessage('error', '加分失败: ' + error.message)
     return
   }
-  
+
   // 动画效果
   bouncingChild.value = quickAddChild.value.id
   setTimeout(() => bouncingChild.value = null, 500)
-  
+
   showMessage('success', `✨ ${quickAddChild.value.name} ${action.name} +${action.points}分！`)
   closeQuickAddModal()
   loadChildren()

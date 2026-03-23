@@ -635,28 +635,37 @@ async function loadChildren() {
     return
   }
   
-  // 实时计算每个孩子的金币余额
-  const childrenWithBalance = await Promise.all(
-    (data || []).map(async (child) => {
-      // 计算该孩子的所有交易记录
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('type, points')
-        .eq('child_id', child.id)
-      
-      const earned = transactions
-        ?.filter(t => t.type === 'earn')
-        ?.reduce((sum, t) => sum + t.points, 0) || 0
-      const spent = transactions
-        ?.filter(t => t.type === 'spend')
-        ?.reduce((sum, t) => sum + t.points, 0) || 0
-      
-      return {
-        ...child,
-        current_balance: earned - spent // 使用计算值覆盖存储值
+  // 批量获取所有孩子的交易记录（一次性查询）
+  const childIds = (data || []).map(c => c.id)
+  let transactionsMap = {}
+  
+  if (childIds.length > 0) {
+    const { data: allTransactions } = await supabase
+      .from('transactions')
+      .select('child_id, type, points')
+      .in('child_id', childIds)
+    
+    // 按孩子ID分组
+    allTransactions?.forEach(tx => {
+      if (!transactionsMap[tx.child_id]) {
+        transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
+      }
+      if (tx.type === 'earn') {
+        transactionsMap[tx.child_id].earned += tx.points
+      } else {
+        transactionsMap[tx.child_id].spent += tx.points
       }
     })
-  )
+  }
+  
+  // 合并数据
+  const childrenWithBalance = (data || []).map(child => {
+    const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
+    return {
+      ...child,
+      current_balance: tx.earned - tx.spent
+    }
+  })
   
   children.value = childrenWithBalance
   console.log('✅ Dashboard: 加载到', children.value.length, '个孩子')

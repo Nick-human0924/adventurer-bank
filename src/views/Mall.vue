@@ -9,7 +9,7 @@
           <p>用努力换来的金币，兑换心仪的奖品</p>
         </div>
       </div>
-      
+
       <!-- 孩子选择器 -->
       <div class="child-selector">
         <label>👶 选择孩子：</label>
@@ -41,7 +41,7 @@
       <span class="loading-spinner">🔄</span>
       <p>加载奖品中...</p>
     </div>
-    
+
     <div v-else-if="prizes.length === 0" class="empty-state">
       <span class="empty-emoji">🎁</span>
       <p>暂无奖品，请先添加</p>
@@ -49,10 +49,10 @@
         ➕ 添加奖品
       </button>
     </div>
-    
+
     <div v-else class="prizes-grid">
-      <div 
-        v-for="prize in prizes" 
+      <div
+        v-for="prize in prizes"
         :key="prize.id"
         class="prize-card"
         :class="{ 'out-of-stock': prize.stock <= 0 }"
@@ -61,32 +61,32 @@
         <div class="stock-badge" :class="{ 'low': prize.stock <= 3, 'empty': prize.stock <= 0 }">
           {{ prize.stock <= 0 ? '已售罄' : `剩余 ${prize.stock} 件` }}
         </div>
-        
+
         <!-- 奖品类型标签 -->
         <div class="prize-type-badge" :class="prize.price_type || 'coins'">
           {{ (prize.price_type || 'coins') === 'coins' ? '💰 金币兑换' : '💎 宝石专属' }}
         </div>
-        
+
         <!-- 奖品图片 -->
         <div class="prize-image">
           <img v-if="prize.image" :src="prize.image" :alt="prize.name" />
           <span v-else class="prize-emoji">🎁</span>
         </div>
-        
+
         <!-- 奖品信息 -->
         <div class="prize-info">
           <h3 class="prize-name">{{ prize.name }}</h3>
           <p class="prize-desc">{{ prize.description || '暂无描述' }}</p>
-          
+
           <div class="prize-price">
             <span class="price-icon">{{ (prize.price_type || 'coins') === 'coins' ? '💰' : '💎' }}</span>
             <span class="price-value" :class="prize.price_type || 'coins'">{{ prize.price }}</span>
             <span class="price-unit">{{ (prize.price_type || 'coins') === 'coins' ? '金币' : '宝石' }}</span>
           </div>
         </div>
-        
+
         <!-- 兑换按钮 -->
-        <button 
+        <button
           class="btn exchange-btn"
           :class="getExchangeBtnClass(prize)"
           :disabled="!canExchange(prize)"
@@ -104,7 +104,7 @@
             帮 {{ selectedChild?.name }} 兑换
           </span>
         </button>
-        
+
         <!-- 管理按钮 -->
         <div class="prize-actions">
           <button class="btn btn-small btn-secondary" @click="editPrize(prize)">
@@ -124,13 +124,13 @@
           <h3>{{ editingPrize ? '✏️ 编辑奖品' : '➕ 添加奖品' }}</h3>
           <button class="close-btn" @click="closeAddPrizeModal">&times;</button>
         </div>
-        
+
         <div class="modal-body">
           <div class="form-group">
             <label>奖品名称 *</label>
             <input v-model="prizeForm.name" type="text" placeholder="例如：乐高积木" />
           </div>
-          
+
           <div class="form-group">
             <label>奖品图片</label>
             <div class="image-upload">
@@ -144,7 +144,7 @@
               </label>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group">
               <label>货币类型 *</label>
@@ -161,24 +161,24 @@
                 </label>
               </div>
             </div>
-            
+
             <div class="form-group">
               <label>所需{{ prizeForm.price_type === 'gems' ? '宝石' : '金币' }} *</label>
               <input v-model.number="prizeForm.price" type="number" min="1" :placeholder="prizeForm.price_type === 'gems' ? '5' : '100'" />
             </div>
           </div>
-          
+
           <div class="form-group">
             <label>库存数量 *</label>
             <input v-model.number="prizeForm.stock" type="number" min="0" placeholder="10" />
           </div>
-          
+
           <div class="form-group">
             <label>奖品描述</label>
             <textarea v-model="prizeForm.description" rows="3" placeholder="描述一下这个奖品..."></textarea>
           </div>
         </div>
-        
+
         <div class="modal-footer">
           <button class="btn" @click="closeAddPrizeModal">取消</button>
           <button class="btn btn-primary" @click="savePrize" :disabled="!prizeForm.name || !prizeForm.price">
@@ -195,7 +195,7 @@
           <h3>🎁 确认兑换</h3>
           <button class="close-btn" @click="closeExchangeModal">&times;</button>
         </div>
-        
+
         <div class="modal-body">
           <div class="confirm-info">
             <div class="confirm-item">
@@ -215,17 +215,17 @@
               <span class="value">{{ selectedChild?.current_balance - selectedPrize?.price }} 金币</span>
             </div>
           </div>
-          
+
           <div class="form-group">
             <label>💬 鼓励的话（可选）</label>
-            <textarea 
-              v-model="exchangeMessage" 
-              rows="3" 
+            <textarea
+              v-model="exchangeMessage"
+              rows="3"
               placeholder="例如：这是你努力练琴的奖励！继续加油！"
             ></textarea>
           </div>
         </div>
-        
+
         <div class="modal-footer">
           <button class="btn" @click="closeExchangeModal">取消</button>
           <button class="btn btn-primary" @click="confirmExchange" :disabled="exchanging">
@@ -239,7 +239,7 @@
     <!-- 颁奖仪式页 -->
     <div v-if="showCelebration" class="celebration-overlay">
       <canvas ref="confettiCanvas" class="confetti-canvas"></canvas>
-      
+
       <div class="celebration-content">
         <div class="certificate">
           <div class="certificate-border">
@@ -249,7 +249,7 @@
                 <h2>荣誉兑换证书</h2>
                 <span class="trophy">🏆</span>
               </div>
-              
+
               <div class="certificate-body">
                 <p class="congrats">恭喜</p>
                 <p class="child-name">{{ celebrationData?.childName }}</p>
@@ -261,14 +261,14 @@
                 </p>
                 <p class="date">{{ new Date().toLocaleDateString('zh-CN') }}</p>
               </div>
-              
+
               <div class="certificate-seal">
                 <span class="seal">🎖️</span>
               </div>
             </div>
           </div>
         </div>
-        
+
         <div class="celebration-actions">
           <button class="btn btn-secondary" @click="printCertificate">
             🖨️ 打印/截图保存
@@ -287,13 +287,13 @@
           <h3>📋 兑换订单</h3>
           <button class="close-btn" @click="showOrders = false">&times;</button>
         </div>
-        
+
         <div class="modal-body">
           <div v-if="orders.length === 0" class="empty-orders">
             <span class="empty-emoji">📭</span>
             <p>暂无兑换记录</p>
           </div>
-          
+
           <div v-else class="orders-list">
             <div v-for="order in orders" :key="order.id" class="order-item">
               <div class="order-prize">
@@ -372,36 +372,45 @@ async function loadChildren() {
     console.error('❌ Mall: 加载孩子失败:', error)
     return
   }
-  
-  // 实时计算每个孩子的金币余额
-  const childrenWithBalance = await Promise.all(
-    (data || []).map(async (child) => {
-      // 计算该孩子的所有交易记录
-      const { data: transactions } = await supabase
-        .from('transactions')
-        .select('type, points')
-        .eq('child_id', child.id)
-      
-      const earned = transactions
-        ?.filter(t => t.type === 'earn')
-        ?.reduce((sum, t) => sum + t.points, 0) || 0
-      const spent = transactions
-        ?.filter(t => t.type === 'spend')
-        ?.reduce((sum, t) => sum + t.points, 0) || 0
-      
-      return {
-        ...child,
-        current_balance: earned - spent // 使用计算值覆盖存储值
+
+  // 批量获取所有孩子的交易记录（一次性查询）
+  const childIds = (data || []).map(c => c.id)
+  let transactionsMap = {}
+
+  if (childIds.length > 0) {
+    const { data: allTransactions } = await supabase
+      .from('transactions')
+      .select('child_id, type, points')
+      .in('child_id', childIds)
+
+    // 按孩子ID分组
+    allTransactions?.forEach(tx => {
+      if (!transactionsMap[tx.child_id]) {
+        transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
+      }
+      if (tx.type === 'earn') {
+        transactionsMap[tx.child_id].earned += tx.points
+      } else {
+        transactionsMap[tx.child_id].spent += tx.points
       }
     })
-  )
-  
+  }
+
+  // 合并数据
+  const childrenWithBalance = (data || []).map(child => {
+    const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
+    return {
+      ...child,
+      current_balance: tx.earned - tx.spent
+    }
+  })
+
   children.value = childrenWithBalance
   console.log('✅ Mall: 加载到', children.value.length, '个孩子')
   children.value.forEach(c => {
     console.log(`  - ${c.name}: ${c.current_balance}金币, ${c.gem_balance || 0}宝石`)
   })
-  
+
   if (children.value.length > 0 && !selectedChildId.value) {
     selectedChildId.value = children.value[0].id
     console.log('🎯 Mall: 自动选中第一个孩子:', children.value[0].name)
@@ -422,7 +431,7 @@ async function loadPrizes() {
 // 加载订单列表
 async function loadOrders() {
   if (!selectedChildId.value) return
-  
+
   const { data } = await supabase
     .from('orders')
     .select(`
@@ -432,7 +441,7 @@ async function loadOrders() {
     `)
     .eq('child_id', selectedChildId.value)
     .order('created_at', { ascending: false })
-  
+
   orders.value = (data || []).map(o => ({
     ...o,
     prize_name: o.prize?.name,
@@ -445,7 +454,7 @@ async function loadOrders() {
 function canExchange(prize) {
   if (!selectedChild.value) return false
   if (prize.stock <= 0) return false
-  
+
   const priceType = prize.price_type || 'coins'
   if (priceType === 'gems') {
     return (selectedChild.value.gem_balance || 0) >= prize.price
@@ -457,7 +466,7 @@ function canExchange(prize) {
 function getExchangeBtnClass(prize) {
   if (prize.stock <= 0) return 'disabled'
   if (!selectedChild.value) return 'disabled'
-  
+
   const priceType = prize.price_type || 'coins'
   if (priceType === 'gems') {
     if ((selectedChild.value.gem_balance || 0) < prize.price) return 'insufficient'
@@ -470,16 +479,16 @@ function getExchangeBtnClass(prize) {
 // 打开兑换弹窗
 async function openExchangeModal(prize) {
   if (!canExchange(prize)) return
-  
+
   // 刷新孩子数据，确保余额是最新的
   await loadChildren()
-  
+
   // 再次检查是否可以兑换（刷新数据后）
   if (!canExchange(prize)) {
     alert('兑换条件已变化，请刷新页面后重试')
     return
   }
-  
+
   selectedPrize.value = prize
   exchangeMessage.value = ''
   showExchangeModal.value = true
@@ -495,16 +504,16 @@ function closeExchangeModal() {
 // 确认兑换
 async function confirmExchange() {
   if (!selectedPrize.value || !selectedChild.value) return
-  
+
   exchanging.value = true
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
-    
+
     const prize = selectedPrize.value
     const child = selectedChild.value
     const priceType = prize.price_type || 'coins'
-    
+
     // 1. 扣除货币（金币或宝石）
     const updateData = {}
     if (priceType === 'gems') {
@@ -512,22 +521,22 @@ async function confirmExchange() {
     } else {
       updateData.current_balance = child.current_balance - prize.price
     }
-    
+
     const { error: childError } = await supabase
       .from('children')
       .update(updateData)
       .eq('id', child.id)
-    
+
     if (childError) throw childError
-    
+
     // 2. 减少库存
     const { error: prizeError } = await supabase
       .from('prizes')
       .update({ stock: prize.stock - 1 })
       .eq('id', prize.id)
-    
+
     if (prizeError) throw prizeError
-    
+
     // 3. 创建交易记录（金币消费）或宝石交易记录
     if (priceType === 'gems') {
       const { error: gemError } = await supabase.from('gem_transactions').insert({
@@ -549,7 +558,7 @@ async function confirmExchange() {
       })
       if (txError) throw txError
     }
-    
+
     // 4. 创建订单
     const { error: orderError } = await supabase.from('orders').insert({
       child_id: child.id,
@@ -560,9 +569,9 @@ async function confirmExchange() {
       status: 'completed',
       user_id: user.id
     })
-    
+
     if (orderError) throw orderError
-    
+
     // 5. 显示颁奖仪式
     celebrationData.value = {
       childName: child.name,
@@ -570,13 +579,13 @@ async function confirmExchange() {
       message: exchangeMessage.value,
       currency: priceType === 'gems' ? '宝石' : '金币'
     }
-    
+
     closeExchangeModal()
     showCelebration.value = true
-    
+
     // 撒花动画
     setTimeout(() => startConfetti(), 100)
-    
+
     // 刷新数据
     await Promise.all([
       loadChildren(),
@@ -595,14 +604,14 @@ async function confirmExchange() {
 function startConfetti() {
   const canvas = document.querySelector('.confetti-canvas')
   if (!canvas) return
-  
+
   const ctx = canvas.getContext('2d')
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
-  
+
   const particles = []
   const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b', '#6c5ce7', '#00b894']
-  
+
   for (let i = 0; i < 150; i++) {
     particles.push({
       x: Math.random() * canvas.width,
@@ -615,17 +624,17 @@ function startConfetti() {
       rotationSpeed: Math.random() * 10 - 5
     })
   }
-  
+
   let animationId
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-    
+
     let activeParticles = 0
     particles.forEach(p => {
       p.y += p.speedY
       p.x += p.speedX
       p.rotation += p.rotationSpeed
-      
+
       if (p.y < canvas.height) {
         activeParticles++
         ctx.save()
@@ -636,14 +645,14 @@ function startConfetti() {
         ctx.restore()
       }
     })
-    
+
     if (activeParticles > 0 && showCelebration.value) {
       animationId = requestAnimationFrame(animate)
     }
   }
-  
+
   animate()
-  
+
   // 5秒后停止
   setTimeout(() => {
     if (animationId) cancelAnimationFrame(animationId)
@@ -665,12 +674,12 @@ function printCertificate() {
 function handleImageUpload(event) {
   const file = event.target.files[0]
   if (!file) return
-  
+
   if (file.size > 2 * 1024 * 1024) {
     alert('图片大小不能超过 2MB')
     return
   }
-  
+
   const reader = new FileReader()
   reader.onload = (e) => {
     prizeForm.value.image = e.target.result
@@ -683,7 +692,7 @@ async function savePrize() {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
-    
+
     const prizeData = {
       name: prizeForm.value.name,
       description: prizeForm.value.description,
@@ -693,7 +702,7 @@ async function savePrize() {
       image: prizeForm.value.image,
       user_id: user.id
     }
-    
+
     if (editingPrize.value) {
       // 编辑模式
       const { error } = await supabase
@@ -701,7 +710,7 @@ async function savePrize() {
         .update(prizeData)
         .eq('id', editingPrize.value.id)
         .eq('user_id', user.id)
-      
+
       if (error) throw error
       alert('✅ 奖品修改成功')
     } else {
@@ -710,7 +719,7 @@ async function savePrize() {
       if (error) throw error
       alert('✅ 奖品添加成功')
     }
-    
+
     closeAddPrizeModal()
     await loadPrizes()
   } catch (error) {
@@ -738,19 +747,19 @@ async function deletePrize(prize) {
   if (!confirm(`确定要删除奖品 "${prize.name}" 吗？\n\n此操作不可恢复！`)) {
     return
   }
-  
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
-    
+
     const { error } = await supabase
       .from('prizes')
       .delete()
       .eq('id', prize.id)
       .eq('user_id', user.id)
-    
+
     if (error) throw error
-    
+
     await loadPrizes()
     alert('✅ 奖品已删除')
   } catch (error) {
@@ -802,7 +811,7 @@ onMounted(() => {
   if (selectedChildId.value) {
     loadOrders()
   }
-  
+
   // 设置实时订阅
   const childrenChannel = supabase
     .channel('mall-children-changes')
@@ -811,9 +820,9 @@ onMounted(() => {
       loadChildren()
     })
     .subscribe()
-  
+
   subscriptions.push(childrenChannel)
-  
+
   // 页面可见性变化时刷新数据
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
@@ -1578,12 +1587,12 @@ function handleVisibilityChange() {
     position: static;
     background: white;
   }
-  
+
   .confetti-canvas,
   .celebration-actions {
     display: none;
   }
-  
+
   .certificate {
     box-shadow: none;
     page-break-inside: avoid;
@@ -1596,19 +1605,19 @@ function handleVisibilityChange() {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .prizes-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .certificate-inner {
     padding: 24px;
   }
-  
+
   .child-name {
     font-size: 1.8rem;
   }
-  
+
   .celebration-actions {
     flex-direction: column;
   }
