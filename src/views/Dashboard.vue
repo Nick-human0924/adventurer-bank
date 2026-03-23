@@ -710,34 +710,61 @@ async function loadChildren() {
 
 // 加载规则
 async function loadRules() {
-  const { data } = await supabase
+  console.log('🔄 Dashboard: 开始加载规则...')
+  
+  const { data, error } = await supabase
     .from('rules')
     .select('*')
     .eq('type', 'good')
     .eq('is_active', true)
     .order('name')
+  
+  if (error) {
+    console.error('❌ Dashboard: 加载规则失败:', error)
+    goodRules.value = []
+    return
+  }
+  
   goodRules.value = data || []
+  console.log('✅ Dashboard: 加载到', goodRules.value.length, '条规则')
 }
 
 // 加载交易记录
 async function loadTransactions() {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  console.log('🔄 Dashboard: 开始加载交易记录...')
+  
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    console.error('❌ Dashboard: 获取用户失败:', userError)
+    return
+  }
+  if (!user) {
+    console.error('❌ Dashboard: 用户未登录')
+    return
+  }
   
   // 获取当前用户的所有孩子ID
-  const { data: userChildren } = await supabase
+  const { data: userChildren, error: childrenError } = await supabase
     .from('children')
     .select('id')
     .eq('user_id', user.id)
   
-  const childIds = userChildren?.map(c => c.id) || []
-  
-  if (childIds.length === 0) {
+  if (childrenError) {
+    console.error('❌ Dashboard: 查询孩子ID失败:', childrenError)
     recentTransactions.value = []
     return
   }
   
-  const { data } = await supabase
+  const childIds = userChildren?.map(c => c.id) || []
+  console.log('📊 Dashboard: 查询交易，孩子IDs:', childIds)
+  
+  if (childIds.length === 0) {
+    console.log('⚠️ Dashboard: 没有孩子，交易记录为空')
+    recentTransactions.value = []
+    return
+  }
+  
+  const { data, error: txError } = await supabase
     .from('transactions')
     .select(`
       *,
@@ -748,6 +775,14 @@ async function loadTransactions() {
     .order('created_at', { ascending: false })
     .limit(20)
   
+  if (txError) {
+    console.error('❌ Dashboard: 加载交易记录失败:', txError)
+    recentTransactions.value = []
+    return
+  }
+  
+  console.log('📊 Dashboard: 查询到', data?.length || 0, '条交易记录')
+  
   recentTransactions.value = (data || []).map(t => ({
     ...t,
     child_name: t.children?.name,
@@ -755,6 +790,8 @@ async function loadTransactions() {
     rule_icon: t.rules?.icon,
     rule_category: t.rules?.category || '其他'
   }))
+  
+  console.log('✅ Dashboard: 加载交易记录完成')
 }
 
 // 加载任务
