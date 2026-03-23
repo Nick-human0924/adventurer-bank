@@ -58,22 +58,24 @@ async function checkTable(tableName) {
 export async function initDatabase() {
   console.log('🔍 正在检查数据库连接...')
   dbStatus.value.checking = true
-  
+
   try {
     // 获取当前用户
     await getCurrentUser()
-    
-    // 检查各个表
-    const childrenCheck = await checkTable('children')
-    const rulesCheck = await checkTable('rules')
-    const transactionsCheck = await checkTable('transactions')
-    
+
+    // 并行检查各个表（提速3倍）
+    const [childrenCheck, rulesCheck, transactionsCheck] = await Promise.all([
+      checkTable('children'),
+      checkTable('rules'),
+      checkTable('transactions')
+    ])
+
     dbStatus.value.tablesExist.children = childrenCheck.exists
     dbStatus.value.tablesExist.rules = rulesCheck.exists
     dbStatus.value.tablesExist.transactions = transactionsCheck.exists
-    
+
     const allTablesExist = childrenCheck.exists && rulesCheck.exists && transactionsCheck.exists
-    
+
     if (allTablesExist) {
       dbStatus.value.connected = true
       dbStatus.value.error = null
@@ -83,7 +85,7 @@ export async function initDatabase() {
       dbStatus.value.error = 'MISSING_TABLES'
       console.error('❌ 数据库连接失败：部分表不存在')
     }
-    
+
     dbStatus.value.checking = false
     return { success: allTablesExist, status: dbStatus.value }
   } catch (error) {

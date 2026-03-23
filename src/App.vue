@@ -188,7 +188,7 @@ onMounted(async () => {
       connectionError.value = true
       console.error('❌ 数据库连接超时')
     }
-  }, 5000)
+  }, 15000) // 增加到15秒超时
   
   try {
     const result = await initDatabase()
