@@ -107,6 +107,9 @@
         
         <!-- 管理按钮 -->
         <div class="prize-actions">
+          <button class="btn btn-small btn-secondary" @click="editPrize(prize)">
+            ✏️ 编辑
+          </button>
           <button class="btn btn-small btn-danger" @click="deletePrize(prize)">
             🗑️ 删除
           </button>
@@ -114,11 +117,11 @@
       </div>
     </div>
 
-    <!-- 添加奖品弹窗 -->
+    <!-- 添加/编辑奖品弹窗 -->
     <div v-if="showAddPrizeModal" class="modal-overlay" @click.self="closeAddPrizeModal">
       <div class="modal prize-modal">
         <div class="modal-header">
-          <h3>➕ 添加奖品</h3>
+          <h3>{{ editingPrize ? '✏️ 编辑奖品' : '➕ 添加奖品' }}</h3>
           <button class="close-btn" @click="closeAddPrizeModal">&times;</button>
         </div>
         
@@ -179,7 +182,7 @@
         <div class="modal-footer">
           <button class="btn" @click="closeAddPrizeModal">取消</button>
           <button class="btn btn-primary" @click="savePrize" :disabled="!prizeForm.name || !prizeForm.price">
-            💾 保存
+            {{ editingPrize ? '💾 保存修改' : '💾 保存' }}
           </button>
         </div>
       </div>
@@ -339,6 +342,7 @@ const showAddPrizeModal = ref(false)
 const showExchangeModal = ref(false)
 const showCelebration = ref(false)
 const showOrders = ref(false)
+const editingPrize = ref(null)  // 当前编辑的奖品，null表示添加模式
 
 // 选中数据
 const selectedPrize = ref(null)
@@ -440,8 +444,18 @@ function getExchangeBtnClass(prize) {
 }
 
 // 打开兑换弹窗
-function openExchangeModal(prize) {
+async function openExchangeModal(prize) {
   if (!canExchange(prize)) return
+  
+  // 刷新孩子数据，确保余额是最新的
+  await loadChildren()
+  
+  // 再次检查是否可以兑换（刷新数据后）
+  if (!canExchange(prize)) {
+    alert('兑换条件已变化，请刷新页面后重试')
+    return
+  }
+  
   selectedPrize.value = prize
   exchangeMessage.value = ''
   showExchangeModal.value = true
@@ -640,13 +654,13 @@ function handleImageUpload(event) {
   reader.readAsDataURL(file)
 }
 
-// 保存奖品
+// 保存奖品（添加或编辑）
 async function savePrize() {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
     
-    const { error } = await supabase.from('prizes').insert({
+    const prizeData = {
       name: prizeForm.value.name,
       description: prizeForm.value.description,
       price_type: prizeForm.value.price_type || 'coins',
@@ -654,22 +668,37 @@ async function savePrize() {
       stock: prizeForm.value.stock,
       image: prizeForm.value.image,
       user_id: user.id
-    })
+    }
     
-    if (error) throw error
+    if (editingPrize.value) {
+      // 编辑模式
+      const { error } = await supabase
+        .from('prizes')
+        .update(prizeData)
+        .eq('id', editingPrize.value.id)
+        .eq('user_id', user.id)
+      
+      if (error) throw error
+      alert('✅ 奖品修改成功')
+    } else {
+      // 添加模式
+      const { error } = await supabase.from('prizes').insert(prizeData)
+      if (error) throw error
+      alert('✅ 奖品添加成功')
+    }
     
     closeAddPrizeModal()
     await loadPrizes()
-    alert('✅ 奖品添加成功')
   } catch (error) {
-    console.error('添加奖品失败:', error)
-    alert('添加失败: ' + error.message)
+    console.error('保存奖品失败:', error)
+    alert('保存失败: ' + error.message)
   }
 }
 
-// 关闭添加奖品弹窗
+// 关闭添加/编辑奖品弹窗
 function closeAddPrizeModal() {
   showAddPrizeModal.value = false
+  editingPrize.value = null  // 清空编辑状态
   prizeForm.value = {
     name: '',
     description: '',
@@ -704,6 +733,20 @@ async function deletePrize(prize) {
     console.error('删除奖品失败:', error)
     alert('删除失败: ' + error.message)
   }
+}
+
+// 编辑奖品
+function editPrize(prize) {
+  editingPrize.value = prize
+  prizeForm.value = {
+    name: prize.name,
+    description: prize.description || '',
+    price_type: prize.price_type || 'coins',
+    price: prize.price,
+    stock: prize.stock,
+    image: prize.image || ''
+  }
+  showAddPrizeModal.value = true
 }
 
 // 获取状态文本
