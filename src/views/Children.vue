@@ -412,7 +412,7 @@ async function loadChildren() {
     return
   }
   
-  // 实时计算每个孩子的金币余额
+  // 实时计算每个孩子的金币余额和累计金币
   const childrenWithBalance = await Promise.all(
     (data || []).map(async (child) => {
       // 计算该孩子的所有交易记录
@@ -430,7 +430,8 @@ async function loadChildren() {
       
       return {
         ...child,
-        current_balance: earned - spent // 使用计算值覆盖存储值
+        current_balance: earned - spent, // 当前余额
+        total_points: earned // 累计获得的金币
       }
     })
   )

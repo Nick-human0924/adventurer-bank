@@ -466,7 +466,6 @@
                   :value="child.id"
                   v-model="taskForm.child_ids"
                 >
-                <span class="child-avatar">{{ child.avatar || '👶' }}</span>
                 <span class="child-name">{{ child.name }}</span>
               </label>
             </div>
@@ -565,6 +564,35 @@
               >
                 <span class="day-number">{{ day.dayOfMonth }}</span>
                 <span v-if="day.completed" class="day-check">✓</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 最近完成记录 -->
+          <div class="detail-history" v-if="taskCompletionHistory.length > 0">
+            <h4>📋 最近完成记录</h4>
+            <div class="history-list">
+              <div 
+                v-for="(record, index) in taskCompletionHistory" 
+                :key="index"
+                class="history-item"
+              >
+                <div class="history-date">
+                  <span class="date-badge">{{ formatDate(record.date) }}</span>
+                  <span v-if="record.items" class="item-count">{{ record.items.length }} 项</span>
+                </div>
+                <div class="history-items">
+                  <span 
+                    v-for="(item, idx) in record.items || []" 
+                    :key="idx"
+                    class="history-tag"
+                  >
+                    {{ item.icon || '✓' }} {{ item.name }}
+                  </span>
+                  <span v-if="!record.items || record.items.length === 0" class="history-tag completed-tag">
+                    ✓ 已完成
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1154,7 +1182,55 @@ function closeDetailModal() {
   selectedTask.value = null
 }
 
-// 工具函数
+// 任务完成历史（用于详情弹窗）
+const taskCompletionHistory = computed(() => {
+  if (!selectedTask.value) return []
+  
+  const history = selectedTask.value.progress?.completion_history || []
+  const comboProgress = selectedTask.value.progress?.combo_progress || {}
+  const linkedRules = selectedTask.value.linkedRules || []
+  
+  // 按日期分组
+  const recordsByDate = {}
+  
+  // 处理 completion_history
+  history.forEach(h => {
+    if (!recordsByDate[h.date]) {
+      recordsByDate[h.date] = { date: h.date, items: [] }
+    }
+    if (h.rule_name) {
+      recordsByDate[h.date].items.push({
+        name: h.rule_name,
+        icon: h.rule_icon || '✓'
+      })
+    }
+  })
+  
+  // 处理 combo_progress（关联规则完成情况）
+  Object.entries(comboProgress).forEach(([ruleId, data]) => {
+    if (data.date) {
+      if (!recordsByDate[data.date]) {
+        recordsByDate[data.date] = { date: data.date, items: [] }
+      }
+      // 查找规则名称
+      const rule = linkedRules.find(r => r.id === ruleId)
+      if (rule) {
+        const exists = recordsByDate[data.date].items.some(i => i.name === rule.name)
+        if (!exists) {
+          recordsByDate[data.date].items.push({
+            name: rule.name,
+            icon: rule.icon || '✓'
+          })
+        }
+      }
+    }
+  })
+  
+  // 转换为数组并按日期倒序排列（最新的在前），取最近10条
+  return Object.values(recordsByDate)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 10)
+})
 function getTaskTypeClass(type) {
   return type || 'single'
 }
@@ -1175,6 +1251,12 @@ function getProgressText(task) {
 }
 
 function getTodayCompletedCount(task) {
+  // 优先使用今日交易记录检测（从task.todayCompletions）
+  if (task.todayCompletions) {
+    return Object.keys(task.todayCompletions).length
+  }
+  
+  // 回退到 combo_progress 检测
   if (!task.progress?.combo_progress) return 0
   
   const today = new Date().toISOString().split('T')[0]
@@ -1913,6 +1995,69 @@ onMounted(async () => {
   left: 50%;
   transform: translateX(-50%);
   animation-delay: 1s;
+}
+
+.detail-history {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 12px;
+}
+
+.detail-history h4 {
+  margin-bottom: 12px;
+  color: #495057;
+}
+
+.history-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.history-item {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+}
+
+.history-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.date-badge {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.item-count {
+  font-size: 0.85rem;
+  color: #868e96;
+}
+
+.history-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #e7f5ff;
+  color: #1864ab;
+  border-radius: 12px;
+  font-size: 0.85rem;
+}
+
+.completed-tag {
+  background: #d3f9d8;
+  color: #2b8a3e;
 }
 
 /* 弹窗样式 */

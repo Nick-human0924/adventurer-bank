@@ -251,19 +251,25 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>选择行为</label>
-            <div class="behavior-grid">
-              <button 
-                v-for="rule in goodRules" 
-                :key="rule.id"
-                class="behavior-option"
-                :class="{ active: selectedBehavior?.id === rule.id }"
-                @click="selectedBehavior = rule"
-              >
-                <span class="behavior-emoji">{{ rule.icon || '⭐' }}</span>
-                <span class="behavior-name">{{ rule.name }}</span>
-                <span class="behavior-points">+{{ rule.points }}</span>
-              </button>
+            <label>选择行为（可多选）</label>
+            <div class="behavior-categories">
+              <div v-for="(rules, category) in rulesByCategory" :key="category" class="behavior-category">
+                <div class="category-header">{{ category }}</div>
+                <div class="behavior-grid">
+                  <button 
+                    v-for="rule in rules" 
+                    :key="rule.id"
+                    class="behavior-option"
+                    :class="{ active: selectedBehaviors.some(b => b.id === rule.id) }"
+                    @click="toggleBehavior(rule)"
+                  >
+                    <span class="behavior-emoji">{{ rule.icon || rule.icon_emoji || '⭐' }}</span>
+                    <span class="behavior-name">{{ rule.name }}</span>
+                    <span class="behavior-points">+{{ rule.points }}</span>
+                    <span v-if="selectedBehaviors.some(b => b.id === rule.id)" class="check-mark">✓</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="form-row">
@@ -292,9 +298,9 @@
         </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="showAddBehaviorModal = false">取消</button>
-          <button class="btn btn-primary" @click="addBehavior" :disabled="!selectedBehavior || addingBehavior">
+          <button class="btn btn-primary" @click="addBehavior" :disabled="selectedBehaviors.length === 0 || addingBehavior">
             <span v-if="addingBehavior">保存中...</span>
-            <span v-else>确认记录</span>
+            <span v-else>确认记录 ({{ selectedBehaviors.length }})</span>
           </button>
         </div>
       </div>
@@ -473,7 +479,7 @@ const bankTitle = computed(() => {
 
 // 新增行为弹窗状态
 const showAddBehaviorModal = ref(false)
-const selectedBehavior = ref(null)
+const selectedBehaviors = ref([])  // 改为数组支持多选
 const behaviorNote = ref('')
 const addingBehavior = ref(false)
 
@@ -521,13 +527,35 @@ const filteredTransactions = computed(() => {
   })
 })
 
+// 按分类分组的规则
+const rulesByCategory = computed(() => {
+  const grouped = {}
+  goodRules.value.forEach(rule => {
+    const category = rule.category || '其他'
+    if (!grouped[category]) {
+      grouped[category] = []
+    }
+    grouped[category].push(rule)
+  })
+  return grouped
+})
+
+// 切换选择行为（多选）
+function toggleBehavior(rule) {
+  const index = selectedBehaviors.value.findIndex(b => b.id === rule.id)
+  if (index > -1) {
+    selectedBehaviors.value.splice(index, 1)
+  } else {
+    selectedBehaviors.value.push(rule)
+  }
+}
+
 // 关联的任务
 const linkedTasks = computed(() => {
-  if (!selectedBehavior.value || !selectedChildId.value) return []
+  if (selectedBehaviors.value.length === 0 || !selectedChildId.value) return []
+  const behaviorIds = selectedBehaviors.value.map(b => b.id)
   return tasks.value.filter(t => 
-    t.task_type === 'single' && 
-    t.status === 'active' &&
-    t.title?.includes(selectedBehavior.value.name)
+    t.linkedRules?.some(r => behaviorIds.includes(r.id))
   )
 })
 
@@ -774,7 +802,7 @@ async function quickAddPoints(action) {
 
 // 新增行为记录
 async function addBehavior() {
-  if (!selectedChildId.value || !selectedBehavior.value) return
+  if (!selectedChildId.value || selectedBehaviors.value.length === 0) return
   
   addingBehavior.value = true
   const child = children.value.find(c => c.id === selectedChildId.value)
@@ -784,21 +812,28 @@ async function addBehavior() {
     const dateTimeStr = `${behaviorDate.value}T${behaviorTime.value}:00`
     const createdAt = new Date(dateTimeStr).toISOString()
     
-    // 1. 创建交易记录
-    const { data: tx, error: txError } = await supabase.from('transactions').insert({
-      child_id: selectedChildId.value,
-      points: selectedBehavior.value.points,
-      type: 'earn',
-      note: behaviorNote.value || selectedBehavior.value.name,
-      rule_id: selectedBehavior.value.id,
-      created_at: createdAt
-    }).select().single()
+    let totalPoints = 0
+    const behaviorNames = []
     
-    if (txError) throw txError
+    // 1. 批量创建交易记录
+    for (const behavior of selectedBehaviors.value) {
+      const { error: txError } = await supabase.from('transactions').insert({
+        child_id: selectedChildId.value,
+        points: behavior.points,
+        type: 'earn',
+        note: behaviorNote.value || behavior.name,
+        rule_id: behavior.id,
+        created_at: createdAt
+      })
+      
+      if (txError) throw txError
+      
+      totalPoints += behavior.points
+      behaviorNames.push(behavior.name)
+    }
     
     // 2. 检查并更新关联的任务进度
     for (const task of linkedTasks.value) {
-      // 获取任务进度
       const { data: progress } = await supabase
         .from('task_progress')
         .select('*')
@@ -807,14 +842,12 @@ async function addBehavior() {
         .single()
       
       if (progress && progress.status !== 'completed') {
-        // 更新为已完成
         await supabase.from('task_progress').update({
           status: 'completed',
           completed_at: new Date().toISOString(),
           current_count: (progress.current_count || 0) + 1
         }).eq('id', progress.id)
         
-        // 更新任务状态
         await supabase.from('tasks').update({
           status: 'completed'
         }).eq('id', task.id)
@@ -823,12 +856,12 @@ async function addBehavior() {
     
     recordMessage.value = { 
       type: 'success', 
-      text: `✨ ${child?.name} ${selectedBehavior.value.name} +${selectedBehavior.value.points}分！${linkedTasks.value.length > 0 ? '（任务已同步完成）' : ''}`
+      text: `✨ ${child?.name} 完成 ${behaviorNames.join('、')}，共 +${totalPoints}分！${linkedTasks.value.length > 0 ? '（任务已同步完成）' : ''}`
     }
     
-    // 重置弹窗和日期时间
+    // 重置弹窗
     showAddBehaviorModal.value = false
-    selectedBehavior.value = null
+    selectedBehaviors.value = []
     behaviorNote.value = ''
     behaviorDate.value = new Date().toISOString().split('T')[0]
     behaviorTime.value = new Date().toTimeString().slice(0, 5)
@@ -1482,7 +1515,28 @@ onUnmounted(() => {
 
 /* 行为弹窗 */
 .behavior-modal {
-  max-width: 500px;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.behavior-categories {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.behavior-category {
+  margin-bottom: 20px;
+}
+
+.category-header {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #495057;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: #f1f3f5;
+  border-radius: 8px;
 }
 
 .behavior-grid {
@@ -1501,6 +1555,7 @@ onUnmounted(() => {
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s;
+  position: relative;
 }
 
 .behavior-option:hover {
@@ -1511,6 +1566,21 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border-color: #667eea;
+}
+
+.check-mark {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #51cf66;
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
 }
 
 .behavior-emoji {
