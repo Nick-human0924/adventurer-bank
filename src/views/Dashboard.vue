@@ -1229,7 +1229,6 @@ function formatDate(dateString) {
 onMounted(async () => {
   await refreshData()
   // 图表初始化已移到 refreshData 内部，数据加载完成后执行
-})
   
   // 订阅实时更新
   subscriptions.push(
@@ -1240,7 +1239,7 @@ onMounted(async () => {
       loadChildren()
     })
   )
-  
+
   subscriptions.push(
     subscribeToTable('children', (payload) => {
       console.log('🔄 收到children更新:', payload)
@@ -1248,7 +1247,7 @@ onMounted(async () => {
       loadStats()
     })
   )
-  
+
   subscriptions.push(
     subscribeToTable('tasks', (payload) => {
       console.log('🔄 收到tasks更新:', payload)
