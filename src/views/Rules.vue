@@ -162,16 +162,40 @@
         </div>
         
         <div class="form-group">
-          <label>图标</label>
-          <div class="icon-picker">
-            <span 
-              v-for="icon in iconOptions" 
-              :key="icon"
-              :class="['icon-option', { active: form.icon === icon }]"
-              @click="form.icon = icon"
-            >
-              {{ icon }}
-            </span>
+          <label>图标 <span class="hint">（已按分类筛选，共 {{ iconOptions.length }} 个）</span></label>
+          <div class="icon-picker-container">
+            <!-- 显示当前分类的图标 -->
+            <div class="icon-picker-category" v-if="form.category !== 'all'">
+              <span class="category-label">{{ form.category }}</span>
+              <div class="icon-picker">
+                <span 
+                  v-for="icon in CATEGORY_ICONS[form.category]?.icons || []" 
+                  :key="icon"
+                  :class="['icon-option', { active: form.icon === icon }]"
+                  @click="form.icon = icon"
+                  :title="icon"
+                >
+                  {{ icon }}
+                </span>
+              </div>
+            </div>
+            <!-- 如果没有选择分类，显示全部图标按分类分组 -->
+            <div v-else class="icon-picker-all">
+              <div v-for="(catData, catName) in CATEGORY_ICONS" :key="catName" class="icon-picker-category">
+                <span class="category-label">{{ catName }}</span>
+                <div class="icon-picker">
+                  <span 
+                    v-for="icon in catData.icons" 
+                    :key="icon"
+                    :class="['icon-option', { active: form.icon === icon }]"
+                    @click="form.icon = icon"
+                    :title="icon"
+                  >
+                    {{ icon }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         
@@ -197,33 +221,67 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { supabase } from '../utils/supabase.js'
+import { CATEGORY_ICONS, suggestIcon, suggestCategory } from '../lib/categoryIcons.js'
 
 const rules = ref([])
 const showAddModal = ref(false)
 const editingRule = ref(null)
 const selectedCategory = ref('all')
 
-// 分类定义
+// 7大分类定义（使用categoryIcons.js的配置）
 const categories = [
   { value: 'all', label: '全部', icon: '📋' },
-  { value: 'sports', label: '运动类', icon: '🏃' },
-  { value: 'study', label: '学习类', icon: '📚' },
-  { value: 'attitude', label: '态度和品德', icon: '❤️' },
-  { value: 'improvement', label: '控制和改正', icon: '🔧' }
+  { value: '运动健康', label: '运动健康', icon: CATEGORY_ICONS['运动健康'].icon },
+  { value: '学习成长', label: '学习成长', icon: CATEGORY_ICONS['学习成长'].icon },
+  { value: '生活自理', label: '生活自理', icon: CATEGORY_ICONS['生活自理'].icon },
+  { value: '艺术创造', label: '艺术创造', icon: CATEGORY_ICONS['艺术创造'].icon },
+  { value: '品德社交', label: '品德社交', icon: CATEGORY_ICONS['品德社交'].icon },
+  { value: '作息规律', label: '作息规律', icon: CATEGORY_ICONS['作息规律'].icon },
+  { value: '健康饮食', label: '健康饮食', icon: CATEGORY_ICONS['健康饮食'].icon },
+  { value: '其他', label: '其他', icon: CATEGORY_ICONS['其他'].icon }
 ]
 
-const iconOptions = ['⭐', '📚', '🏃', '🧹', '🎨', '🎵', '🤝', '💤', '🍎', '🎯', '🏆', '💪', '🧠', '❤️', '🌟', '⚽', '🎹', '📖', '✏️', '🧩', '🎮', '🚫', '⚠️', '🔔']
+// 根据当前选择的分类获取可用图标
+const iconOptions = computed(() => {
+  if (form.value.category && form.value.category !== 'all') {
+    return CATEGORY_ICONS[form.value.category]?.icons || CATEGORY_ICONS['其他'].icons
+  }
+  // 如果未选择分类，返回所有图标
+  return Object.values(CATEGORY_ICONS).flatMap(cat => cat.icons)
+})
 
 const form = ref({
   type: 'good',
-  category: 'study',
+  category: '学习成长',
   name: '',
-  icon: '⭐',
+  icon: '📚',
   description: '',
   points: 10,
   is_active: true
+})
+
+// 监听规则名称变化，智能推荐分类和图标
+watch(() => form.value.name, (newName) => {
+  if (newName && !editingRule.value) {
+    const suggestedCategory = suggestCategory(newName)
+    const suggestedIcon = suggestIcon(newName, suggestedCategory)
+    
+    form.value.category = suggestedCategory
+    form.value.icon = suggestedIcon
+  }
+})
+
+// 监听分类变化，自动切换图标
+watch(() => form.value.category, (newCategory) => {
+  if (newCategory && CATEGORY_ICONS[newCategory]) {
+    // 如果当前图标不在新分类的图标列表中，切换为分类默认图标
+    const categoryIcons = CATEGORY_ICONS[newCategory].icons
+    if (!categoryIcons.includes(form.value.icon)) {
+      form.value.icon = CATEGORY_ICONS[newCategory].icon
+    }
+  }
 })
 
 const goodRules = computed(() => rules.value.filter(r => r.type === 'good'))
@@ -243,7 +301,12 @@ const filteredBadRules = computed(() => {
 // 获取分类标签
 function getCategoryLabel(category) {
   const cat = categories.find(c => c.value === category)
-  return cat ? cat.label : category
+  return cat ? `${cat.icon} ${cat.label}` : category
+}
+
+// 获取分类颜色
+function getCategoryColor(category) {
+  return CATEGORY_ICONS[category]?.color || '#ffd93d'
 }
 const goodRulesCount = computed(() => goodRules.value.length)
 const badRulesCount = computed(() => badRules.value.length)
@@ -320,9 +383,9 @@ function editRule(rule) {
   editingRule.value = rule
   form.value = {
     type: rule.type,
-    category: rule.category || 'study',
+    category: rule.category || '学习成长',
     name: rule.name,
-    icon: rule.icon,
+    icon: rule.icon || '📚',
     description: rule.description,
     points: rule.points,
     is_active: rule.is_active
@@ -352,9 +415,9 @@ function closeModal() {
   editingRule.value = null
   form.value = {
     type: 'good',
-    category: 'study',
+    category: '学习成长',
     name: '',
-    icon: '⭐',
+    icon: '📚',
     description: '',
     points: 10,
     is_active: true
@@ -415,23 +478,65 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.category-tag.sports {
-  background: #d3f9d8;
-  color: #2b8a3e;
-}
-
-.category-tag.study {
-  background: #dbe4ff;
-  color: #364fc7;
-}
-
-.category-tag.attitude {
+/* 7大分类颜色 */
+.category-tag.运动健康 {
   background: #ffe3e3;
   color: #c92a2a;
 }
 
+.category-tag.学习成长 {
+  background: #e7f5ff;
+  color: #1864ab;
+}
+
+.category-tag.生活自理 {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.category-tag.艺术创造 {
+  background: #fff0f6;
+  color: #c2255c;
+}
+
+.category-tag.品德社交 {
+  background: #f3d9fa;
+  color: #862e9c;
+}
+
+.category-tag.作息规律 {
+  background: #fff9db;
+  color: #e67700;
+}
+
+.category-tag.健康饮食 {
+  background: #e6fcf5;
+  color: #087f5b;
+}
+
+.category-tag.其他 {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+/* 旧分类兼容（如果有旧数据） */
+.category-tag.sports {
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+.category-tag.study {
+  background: #e7f5ff;
+  color: #1864ab;
+}
+
+.category-tag.attitude {
+  background: #f3d9fa;
+  color: #862e9c;
+}
+
 .category-tag.improvement {
-  background: #fff3bf;
+  background: #fff9db;
   color: #e67700;
 }
 
@@ -480,36 +585,94 @@ onMounted(() => {
   color: #ff416c;
 }
 
+/* 图标选择器容器 */
+.icon-picker-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+}
+
+.icon-picker-category {
+  margin-bottom: 16px;
+}
+
+.icon-picker-category:last-child {
+  margin-bottom: 0;
+}
+
+.category-label {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+}
+
 .icon-picker {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .icon-option {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
   border: 2px solid #e9ecef;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s;
+  background: white;
 }
 
 .icon-option:hover {
   border-color: #667eea;
+  transform: scale(1.1);
 }
 
 .icon-option.active {
   border-color: #667eea;
-  background: #f0f1ff;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
 textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: #868e96;
+  font-weight: normal;
+}
+
+/* 滚动条样式 */
+.icon-picker-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.icon-picker-container::-webkit-scrollbar-track {
+  background: #f1f3f5;
+  border-radius: 3px;
+}
+
+.icon-picker-container::-webkit-scrollbar-thumb {
+  background: #adb5bd;
+  border-radius: 3px;
+}
+
+.icon-picker-container::-webkit-scrollbar-thumb:hover {
+  background: #868e96;
 }
 </style>
