@@ -993,7 +993,46 @@ async function initTrendChart() {
   
   console.log('📊 Dashboard: 趋势图开始查询数据...')
   
-  // 获取最近7天的真实交易数据
+  // 获取最近7天的日期范围
+  const endDate = new Date()
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - 6)
+  
+  const startStr = startDate.toISOString().split('T')[0]
+  const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59'
+  
+  // 一次性查询最近7天的所有交易（从所有孩子）
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+  const { data: userChildren } = await supabase
+    .from('children')
+    .select('id')
+    .eq('user_id', currentUser.id)
+  
+  const childIds = userChildren?.map(c => c.id) || []
+  
+  if (childIds.length === 0) {
+    console.log('⚠️ Dashboard: 没有孩子，趋势图显示空数据')
+    // 显示空图表
+    renderTrendChart([], [], [])
+    return
+  }
+  
+  // 一次性查询7天内所有交易
+  const { data: allTransactions, error: txError } = await supabase
+    .from('transactions')
+    .select('created_at, type, points')
+    .in('child_id', childIds)
+    .gte('created_at', startStr)
+    .lte('created_at', endStr)
+  
+  if (txError) {
+    console.error('❌ Dashboard: 趋势图查询交易失败:', txError)
+    return
+  }
+  
+  console.log('📊 Dashboard: 趋势图查询到', allTransactions?.length || 0, '条交易记录')
+  
+  // 按日期分组统计
   const dates = []
   const earned = []
   const spent = []
@@ -1004,36 +1043,27 @@ async function initTrendChart() {
     const dateStr = d.toISOString().split('T')[0]
     dates.push(d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }))
     
-    // 查询当天的获得金币
-    const { data: earnedData } = await supabase
-      .from('transactions')
-      .select('points')
-      .eq('user_id', user.id)
-      .eq('type', 'earn')
-      .gte('created_at', dateStr)
-      .lt('created_at', dateStr + 'T23:59:59')
-    
-    // 查询当天的消费金币
-    const { data: spentData } = await supabase
-      .from('transactions')
-      .select('points')
-      .eq('user_id', user.id)
-      .eq('type', 'spend')
-      .gte('created_at', dateStr)
-      .lt('created_at', dateStr + 'T23:59:59')
-    
-    const earnedPoints = earnedData?.reduce((sum, t) => sum + t.points, 0) || 0
-    const spentPoints = spentData?.reduce((sum, t) => sum + t.points, 0) || 0
+    // 统计当天的获得和消费
+    const dayTransactions = allTransactions?.filter(tx => tx.created_at.startsWith(dateStr)) || []
+    const earnedPoints = dayTransactions
+      .filter(tx => tx.type === 'earn')
+      .reduce((sum, tx) => sum + tx.points, 0)
+    const spentPoints = dayTransactions
+      .filter(tx => tx.type === 'spend')
+      .reduce((sum, tx) => sum + tx.points, 0)
     
     earned.push(earnedPoints)
     spent.push(spentPoints)
   }
   
-  console.log('📊 Dashboard: 趋势图数据查询完成:', { dates, earned, spent })
-  
-  // 在初始化之前再次检查 DOM
+  console.log('📊 Dashboard: 趋势图数据处理完成')
+  renderTrendChart(dates, earned, spent)
+}
+
+// 渲染趋势图（分离渲染逻辑）
+function renderTrendChart(dates, earned, spent) {
   if (!trendChart.value) {
-    console.error('❌ Dashboard: trendChart DOM 元素在数据加载后丢失')
+    console.error('❌ Dashboard: trendChart DOM 元素丢失')
     return
   }
   
@@ -1084,6 +1114,7 @@ async function initTrendChart() {
   }
   
   trendChartInstance.setOption(option)
+  console.log('✅ Dashboard: 趋势图渲染完成')
 }
 
 // 初始化饼图
@@ -1151,15 +1182,32 @@ function initPieChart() {
 // 刷新数据
 async function refreshData() {
   isRefreshing.value = true
+  console.log('🔄 Dashboard: 开始刷新数据...')
+  
+  const startTime = performance.now()
+  
   try {
+    // 先加载核心数据（阻塞渲染）
+    await loadChildren()
+    await loadRules()
+    
+    // 再并行加载次要数据
     await Promise.all([
-      loadStats(),
-      loadChildren(),
-      loadRules(),
       loadTransactions(),
+      loadStats(),
       loadTasks()
     ])
-    console.log('✅ 数据刷新完成')
+    
+    const endTime = performance.now()
+    console.log(`✅ Dashboard: 数据刷新完成，耗时 ${(endTime - startTime).toFixed(0)}ms`)
+    
+    // 数据加载完成后再初始化图表
+    nextTick(() => {
+      console.log('📊 Dashboard: 数据已加载，开始初始化图表...')
+      initTrendChart()
+      initPieChart()
+    })
+    
   } catch (error) {
     console.error('❌ 刷新数据失败:', error)
   } finally {
@@ -1180,11 +1228,8 @@ function formatDate(dateString) {
 
 onMounted(async () => {
   await refreshData()
-  
-  nextTick(() => {
-    initTrendChart()
-    initPieChart()
-  })
+  // 图表初始化已移到 refreshData 内部，数据加载完成后执行
+})
   
   // 订阅实时更新
   subscriptions.push(
