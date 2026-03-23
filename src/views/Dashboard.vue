@@ -619,8 +619,19 @@ async function loadStats() {
 
 // 加载孩子列表
 async function loadChildren() {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  console.log('🔄 Dashboard: 开始加载孩子...')
+  
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  
+  if (userError) {
+    console.error('❌ Dashboard: 获取用户失败:', userError)
+    return
+  }
+  
+  if (!user) {
+    console.error('❌ Dashboard: 用户未登录')
+    return
+  }
   
   console.log('🔄 Dashboard: 加载孩子，用户ID:', user.id)
   
@@ -635,31 +646,42 @@ async function loadChildren() {
     return
   }
   
-  // 批量获取所有孩子的交易记录（一次性查询）
-  const childIds = (data || []).map(c => c.id)
-  let transactionsMap = {}
+  console.log('📊 Dashboard: 查询到', data?.length || 0, '个孩子')
   
-  if (childIds.length > 0) {
-    const { data: allTransactions } = await supabase
-      .from('transactions')
-      .select('child_id, type, points')
-      .in('child_id', childIds)
-    
-    // 按孩子ID分组
-    allTransactions?.forEach(tx => {
-      if (!transactionsMap[tx.child_id]) {
-        transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
-      }
-      if (tx.type === 'earn') {
-        transactionsMap[tx.child_id].earned += tx.points
-      } else {
-        transactionsMap[tx.child_id].spent += tx.points
-      }
-    })
+  // 如果没有孩子，直接返回
+  if (!data || data.length === 0) {
+    children.value = []
+    console.log('⚠️ Dashboard: 没有孩子数据')
+    return
   }
   
+  // 批量获取所有孩子的交易记录（一次性查询）
+  const childIds = data.map(c => c.id)
+  let transactionsMap = {}
+  
+  const { data: allTransactions, error: txError } = await supabase
+    .from('transactions')
+    .select('child_id, type, points')
+    .in('child_id', childIds)
+  
+  if (txError) {
+    console.error('❌ Dashboard: 加载交易记录失败:', txError)
+  }
+  
+  // 按孩子ID分组
+  allTransactions?.forEach(tx => {
+    if (!transactionsMap[tx.child_id]) {
+      transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
+    }
+    if (tx.type === 'earn') {
+      transactionsMap[tx.child_id].earned += tx.points
+    } else {
+      transactionsMap[tx.child_id].spent += tx.points
+    }
+  })
+  
   // 合并数据
-  const childrenWithBalance = (data || []).map(child => {
+  const childrenWithBalance = data.map(child => {
     const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
     return {
       ...child,
@@ -738,9 +760,14 @@ async function loadTransactions() {
 // 加载任务
 async function loadTasks() {
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  if (!user) {
+    console.error('❌ Dashboard: 加载任务时用户未登录')
+    return
+  }
   
-  const { data: tasksData } = await supabase
+  console.log('🔄 Dashboard: 加载任务，用户ID:', user.id)
+  
+  const { data: tasksData, error: tasksError } = await supabase
     .from('tasks')
     .select('*')
     .eq('user_id', user.id)
@@ -748,27 +775,47 @@ async function loadTasks() {
     .order('created_at', { ascending: false })
     .limit(10)
   
+  if (tasksError) {
+    console.error('❌ Dashboard: 加载任务失败:', tasksError)
+    tasks.value = []
+    return
+  }
+  
+  console.log('📊 Dashboard: 查询到', tasksData?.length || 0, '个任务')
+  
+  if (!tasksData || tasksData.length === 0) {
+    tasks.value = []
+    return
+  }
+  
   // 获取任务分配的孩子（从 task_progress 表，带 user_id 过滤）
   const tasksWithChildren = await Promise.all(
-    (tasksData || []).map(async (task) => {
-      const { data: progress } = await supabase
+    tasksData.map(async (task) => {
+      const { data: progress, error: progressError } = await supabase
         .from('task_progress')
         .select('child_id, children(name, avatar)')
         .eq('task_id', task.id)
         .eq('user_id', user.id)
       
+      if (progressError) {
+        console.error(`❌ Dashboard: 加载任务${task.id}的进度失败:`, progressError)
+      }
+      
+      const childrenList = progress?.map(p => ({
+        id: p.child_id,
+        name: p.children?.name || '未知',
+        avatar: p.children?.avatar || '👶'
+      })) || []
+      
       return {
         ...task,
-        children: progress?.map(p => ({
-          id: p.child_id,
-          name: p.children?.name,
-          avatar: p.children?.avatar
-        })) || []
+        children: childrenList
       }
     })
   )
   
   tasks.value = tasksWithChildren
+  console.log('✅ Dashboard: 加载到', tasks.value.length, '个任务')
 }
 
 // 快速加分

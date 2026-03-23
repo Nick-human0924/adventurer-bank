@@ -85,7 +85,7 @@
         </div>        
         <div class="info-item">
           <span class="label">版本</span>          
-          <span class="value">v3.5.4</span>
+          <span class="value">v3.5.5</span>
         </div>        
         <div class="info-item">
           <span class="label">技术栈</span>          
