@@ -35,11 +35,11 @@
           <label>👶 选择孩子：</label>
           <select v-model="selectedChildId" v-if="children.length > 1">
             <option v-for="child in children" :key="child.id" :value="child.id">
-              {{ child.avatar || '👶' }} {{ child.name }} ({{ child.current_balance }}💰 {{ child.gem_balance || 0 }}💎)
+              {{ child.name }} ({{ child.current_balance }}💰 {{ child.gem_balance || 0 }}💎)
             </option>
           </select>
           <span v-else-if="children.length === 1" class="single-child">
-            {{ children[0].avatar || '👶' }} {{ children[0].name }} ({{ children[0].current_balance }}💰 {{ children[0].gem_balance || 0 }}💎)
+            {{ children[0].name }} ({{ children[0].current_balance }}💰 {{ children[0].gem_balance || 0 }}💎)
           </span>
           <span v-else class="no-child">请先添加孩子</span>
         </div>
@@ -971,16 +971,27 @@ async function addBehavior() {
 
 // 初始化趋势图
 async function initTrendChart() {
+  console.log('📊 Dashboard: 开始初始化趋势图...')
+  
   // 等待 DOM 准备好
   await nextTick()
   
   if (!trendChart.value) {
-    console.log('trendChart DOM 元素未准备好')
+    console.error('❌ Dashboard: trendChart DOM 元素未准备好')
     return
   }
   
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    console.error('❌ Dashboard: 趋势图获取用户失败:', userError)
+    return
+  }
+  if (!user) {
+    console.error('❌ Dashboard: 趋势图用户未登录')
+    return
+  }
+  
+  console.log('📊 Dashboard: 趋势图开始查询数据...')
   
   // 获取最近7天的真实交易数据
   const dates = []
@@ -1018,17 +1029,20 @@ async function initTrendChart() {
     spent.push(spentPoints)
   }
   
+  console.log('📊 Dashboard: 趋势图数据查询完成:', { dates, earned, spent })
+  
   // 在初始化之前再次检查 DOM
   if (!trendChart.value) {
-    console.log('trendChart DOM 元素在数据加载后丢失')
+    console.error('❌ Dashboard: trendChart DOM 元素在数据加载后丢失')
     return
   }
   
   if (!trendChartInstance) {
     try {
       trendChartInstance = echarts.init(trendChart.value)
+      console.log('✅ Dashboard: 趋势图 ECharts 初始化成功')
     } catch (e) {
-      console.error('ECharts 初始化失败:', e)
+      console.error('❌ Dashboard: ECharts 初始化失败:', e)
       return
     }
   }
@@ -1074,9 +1088,20 @@ async function initTrendChart() {
 
 // 初始化饼图
 function initPieChart() {
-  if (!pieChart.value) return
+  console.log('📊 Dashboard: 开始初始化饼图...')
   
-  pieChartInstance = echarts.init(pieChart.value)
+  if (!pieChart.value) {
+    console.error('❌ Dashboard: pieChart DOM 元素未准备好')
+    return
+  }
+  
+  try {
+    pieChartInstance = echarts.init(pieChart.value)
+    console.log('✅ Dashboard: 饼图 ECharts 初始化成功')
+  } catch (e) {
+    console.error('❌ Dashboard: 饼图 ECharts 初始化失败:', e)
+    return
+  }
   
   // 从实际交易数据统计行为分布
   const categoryStats = {}
