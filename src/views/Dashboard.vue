@@ -531,15 +531,25 @@ const linkedTasks = computed(() => {
   )
 })
 
-// 快速加分操作
-const quickActions = [
-  { id: 'wake_up', name: '按时起床', emoji: '🌅', points: 5, color: 'sunrise' },
-  { id: 'homework', name: '完成作业', emoji: '📝', points: 10, color: 'ocean' },
-  { id: 'reading', name: '阅读时光', emoji: '📚', points: 8, color: 'purple' },
-  { id: 'housework', name: '做家务', emoji: '🧹', points: 6, color: 'leaf' },
-  { id: 'exercise', name: '运动锻炼', emoji: '⚽', points: 7, color: 'fire' },
-  { id: 'kindness', name: '帮助他人', emoji: '💝', points: 5, color: 'love' }
-]
+// 快速加分操作 - 从数据库规则动态生成
+const quickActions = computed(() => {
+  // 优先使用数据库中的good规则，最多显示6个
+  const rules = goodRules.value.slice(0, 6)
+  if (rules.length === 0) {
+    // 如果没有规则，返回空数组
+    return []
+  }
+  // 映射规则为快速操作按钮
+  const colorMap = ['sunrise', 'ocean', 'purple', 'leaf', 'fire', 'love']
+  return rules.map((rule, index) => ({
+    id: rule.id,
+    name: rule.name,
+    emoji: rule.icon_emoji || rule.icon || '⭐',
+    points: rule.points,
+    color: colorMap[index % colorMap.length],
+    rule_id: rule.id
+  }))
+})
 
 // 待办任务（未完成的任务）
 const pendingTasks = computed(() => {
@@ -597,7 +607,30 @@ async function loadChildren() {
     return
   }
   
-  children.value = data || []
+  // 实时计算每个孩子的金币余额
+  const childrenWithBalance = await Promise.all(
+    (data || []).map(async (child) => {
+      // 计算该孩子的所有交易记录
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select('type, points')
+        .eq('child_id', child.id)
+      
+      const earned = transactions
+        ?.filter(t => t.type === 'earn')
+        ?.reduce((sum, t) => sum + t.points, 0) || 0
+      const spent = transactions
+        ?.filter(t => t.type === 'spend')
+        ?.reduce((sum, t) => sum + t.points, 0) || 0
+      
+      return {
+        ...child,
+        current_balance: earned - spent // 使用计算值覆盖存储值
+      }
+    })
+  )
+  
+  children.value = childrenWithBalance
   console.log('✅ Dashboard: 加载到', children.value.length, '个孩子')
   children.value.forEach(c => {
     console.log(`  - ${c.name}: ${c.current_balance}金币, ${c.gem_balance || 0}宝石`)
@@ -650,17 +683,18 @@ async function loadTransactions() {
     .select(`
       *,
       children(name),
-      rules(name, icon)
+      rules(name, icon, category)
     `)
     .in('child_id', childIds)
     .order('created_at', { ascending: false })
-    .limit(10)
+    .limit(20)
   
   recentTransactions.value = (data || []).map(t => ({
     ...t,
     child_name: t.children?.name,
     rule_name: t.rules?.name || t.note || '-',
-    rule_icon: t.rules?.icon
+    rule_icon: t.rules?.icon,
+    rule_category: t.rules?.category || '其他'
   }))
 }
 
@@ -918,6 +952,26 @@ function initPieChart() {
   
   pieChartInstance = echarts.init(pieChart.value)
   
+  // 从实际交易数据统计行为分布
+  const categoryStats = {}
+  recentTransactions.value.forEach(tx => {
+    const category = tx.rule_category || '其他'
+    categoryStats[category] = (categoryStats[category] || 0) + 1
+  })
+  
+  // 转换为饼图数据格式
+  const pieData = Object.entries(categoryStats).map(([name, value]) => ({
+    value,
+    name
+  }))
+  
+  // 如果没有数据，显示默认空数据
+  const data = pieData.length > 0 
+    ? pieData 
+    : [
+        { value: 1, name: '暂无数据', itemStyle: { color: '#e0e0e0' } }
+      ]
+  
   const option = {
     tooltip: { trigger: 'item' },
     legend: { orient: 'vertical', right: '5%', top: 'center' },
@@ -935,13 +989,7 @@ function initPieChart() {
         emphasis: {
           label: { show: true, fontSize: 16, fontWeight: 'bold' }
         },
-        data: [
-          { value: 35, name: '学习表现', itemStyle: { color: '#667eea' } },
-          { value: 25, name: '家务劳动', itemStyle: { color: '#11998e' } },
-          { value: 20, name: '体育锻炼', itemStyle: { color: '#f093fb' } },
-          { value: 15, name: '社交礼仪', itemStyle: { color: '#4facfe' } },
-          { value: 5, name: '其他', itemStyle: { color: '#ff9f43' } }
-        ]
+        data
       }
     ]
   }

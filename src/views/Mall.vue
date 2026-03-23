@@ -372,7 +372,31 @@ async function loadChildren() {
     console.error('❌ Mall: 加载孩子失败:', error)
     return
   }
-  children.value = data || []
+  
+  // 实时计算每个孩子的金币余额
+  const childrenWithBalance = await Promise.all(
+    (data || []).map(async (child) => {
+      // 计算该孩子的所有交易记录
+      const { data: transactions } = await supabase
+        .from('transactions')
+        .select('type, points')
+        .eq('child_id', child.id)
+      
+      const earned = transactions
+        ?.filter(t => t.type === 'earn')
+        ?.reduce((sum, t) => sum + t.points, 0) || 0
+      const spent = transactions
+        ?.filter(t => t.type === 'spend')
+        ?.reduce((sum, t) => sum + t.points, 0) || 0
+      
+      return {
+        ...child,
+        current_balance: earned - spent // 使用计算值覆盖存储值
+      }
+    })
+  )
+  
+  children.value = childrenWithBalance
   console.log('✅ Mall: 加载到', children.value.length, '个孩子')
   children.value.forEach(c => {
     console.log(`  - ${c.name}: ${c.current_balance}金币, ${c.gem_balance || 0}宝石`)
