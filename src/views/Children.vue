@@ -400,7 +400,7 @@ function closeAchievements() {
   selectedChild.value = null
 }
 
-// 加载孩子列表
+// 加载孩子列表 - 优化版（不查询transactions，使用数据库字段）
 async function loadChildren() {
   const { data, error } = await supabase
     .from('children')
@@ -409,43 +409,16 @@ async function loadChildren() {
 
   if (error) {
     console.error('加载孩子失败:', error)
+    showMessage('error', '加载失败: ' + error.message)
     return
   }
 
-  // 批量获取所有孩子的交易记录（一次性查询）
-  const childIds = (data || []).map(c => c.id)
-  let transactionsMap = {}
-
-  if (childIds.length > 0) {
-    const { data: allTransactions } = await supabase
-      .from('transactions')
-      .select('child_id, type, points')
-      .in('child_id', childIds)
-
-    // 按孩子ID分组
-    allTransactions?.forEach(tx => {
-      if (!transactionsMap[tx.child_id]) {
-        transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
-      }
-      if (tx.type === 'earn') {
-        transactionsMap[tx.child_id].earned += tx.points
-      } else {
-        transactionsMap[tx.child_id].spent += tx.points
-      }
-    })
-  }
-
-  // 合并数据
-  const childrenWithBalance = (data || []).map(child => {
-    const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
-    return {
-      ...child,
-      current_balance: tx.earned - tx.spent,
-      total_points: tx.earned
-    }
-  })
-
-  children.value = childrenWithBalance
+  // 直接使用数据库字段，不实时计算transactions（提升速度）
+  children.value = (data || []).map(child => ({
+    ...child,
+    current_balance: child.current_balance || 0,
+    total_points: child.total_points || 0
+  }))
 }
 
 // 保存孩子
