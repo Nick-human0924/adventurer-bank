@@ -100,3 +100,4 @@ kids-behavior-bank/
 ## 📄 许可证
 
 MIT
+# Trigger redeploy 1774328869
