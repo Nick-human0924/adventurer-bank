@@ -400,7 +400,7 @@ function closeAchievements() {
   selectedChild.value = null
 }
 
-// 加载孩子列表 - 优化版（不查询transactions，使用数据库字段）
+// 加载孩子列表 - 实时计算金币（与Dashboard保持一致）
 async function loadChildren() {
   const { data, error } = await supabase
     .from('children')
@@ -413,12 +413,51 @@ async function loadChildren() {
     return
   }
 
-  // 直接使用数据库字段，不实时计算transactions（提升速度）
-  children.value = (data || []).map(child => ({
-    ...child,
-    current_balance: child.current_balance || 0,
-    total_points: child.total_points || 0
-  }))
+  if (!data || data.length === 0) {
+    children.value = []
+    return
+  }
+
+  // 批量获取所有孩子的交易记录，实时计算金币
+  const childIds = data.map(c => c.id)
+  const { data: transactions, error: txError } = await supabase
+    .from('transactions')
+    .select('child_id, type, points')
+    .in('child_id', childIds)
+
+  if (txError) {
+    console.error('加载交易记录失败:', txError)
+    // 降级使用数据库字段
+    children.value = (data || []).map(child => ({
+      ...child,
+      current_balance: child.current_balance || 0,
+      total_points: child.total_points || 0
+    }))
+    return
+  }
+
+  // 按孩子ID分组统计
+  const txMap = {}
+  transactions?.forEach(tx => {
+    if (!txMap[tx.child_id]) {
+      txMap[tx.child_id] = { earned: 0, spent: 0 }
+    }
+    if (tx.type === 'earn') {
+      txMap[tx.child_id].earned += tx.points
+    } else {
+      txMap[tx.child_id].spent += tx.points
+    }
+  })
+
+  // 实时计算金币余额
+  children.value = data.map(child => {
+    const tx = txMap[child.id] || { earned: 0, spent: 0 }
+    return {
+      ...child,
+      current_balance: tx.earned - tx.spent,
+      total_points: tx.earned  // 累计获得的金币
+    }
+  })
 }
 
 // 保存孩子

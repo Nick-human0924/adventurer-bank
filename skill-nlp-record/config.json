@@ -1,0 +1,11 @@
+{
+  "name": "behavior-bank-nlp",
+  "version": "1.0.0",
+  "description": "自然语言录入儿童行为到行为银行",
+  "patterns": [
+    "安哲",
+    "申安哲", 
+    "Andrew",
+    "安德鲁"
+  ]
+}

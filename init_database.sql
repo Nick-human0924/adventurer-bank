@@ -82,6 +82,9 @@ CREATE POLICY "Users can view their own transactions" ON transactions
 CREATE POLICY "Users can insert their own transactions" ON transactions
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can delete their own transactions" ON transactions
+    FOR DELETE USING (auth.uid() = user_id);
+
 -- 4. 创建 tasks 表 (任务表)
 CREATE TABLE IF NOT EXISTS tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
