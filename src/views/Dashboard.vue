@@ -1033,13 +1033,40 @@ function formatDate(dateString) {
 function getCategoryFromNote(note) {
   if (!note) return '其他'
   
-  if (note.includes('作业') || note.includes('学习') || note.includes('阅读') || note.includes('abc')) return '学习成长'
-  if (note.includes('运动') || note.includes('体育')) return '运动健康'
-  if (note.includes('整理') || note.includes('打扫') || note.includes('家务') || note.includes('房间')) return '生活自理'
-  if (note.includes('画') || note.includes('音乐') || note.includes('艺术')) return '艺术创造'
-  if (note.includes('帮助') || note.includes('分享') || note.includes('礼貌')) return '品德社交'
-  if (note.includes('早起') || note.includes('睡觉') || note.includes('作息') || note.includes('按时')) return '作息规律'
-  if (note.includes('吃') || note.includes('蔬菜') || note.includes('水果')) return '健康饮食'
+  const n = note.toLowerCase()
+  
+  // 学习成长 - 教育学习类
+  if (n.includes('英语') || n.includes('英文') || n.includes('abc') || n.includes('reading')) return '学习成长'
+  if (n.includes('数学') || n.includes('math') || n.includes('算术') || n.includes('计算')) return '学习成长'
+  if (n.includes('语文') || n.includes('识字') || n.includes('拼音')) return '学习成长'
+  if (n.includes('作业') || n.includes('学习') || n.includes('阅读') || n.includes('看书')) return '学习成长'
+  if (n.includes('练习') || n.includes('练字') || n.includes('画画') && n.includes('学习')) return '学习成长'
+  
+  // 运动健康
+  if (n.includes('运动') || n.includes('体育') || n.includes('跑步') || n.includes('跳绳')) return '运动健康'
+  if (n.includes('锻炼') || n.includes('健身') || n.includes('户外')) return '运动健康'
+  
+  // 生活自理
+  if (n.includes('整理') || n.includes('打扫') || n.includes('家务') || n.includes('房间')) return '生活自理'
+  if (n.includes('收拾') || n.includes('清洁') || n.includes('洗碗') || n.includes('叠被')) return '生活自理'
+  if (n.includes('穿衣') || n.includes('洗漱') || n.includes('洗澡')) return '生活自理'
+  
+  // 艺术创造
+  if (n.includes('画') || n.includes('音乐') || n.includes('艺术') || n.includes('钢琴')) return '艺术创造'
+  if (n.includes('舞蹈') || n.includes('唱歌') || n.includes('手工') || n.includes('创作')) return '艺术创造'
+  
+  // 品德社交
+  if (n.includes('帮助') || n.includes('分享') || n.includes('礼貌') || n.includes('问好')) return '品德社交'
+  if (n.includes('夸奖') || n.includes('表扬') || n.includes('赞美') || n.includes('鼓励')) return '品德社交'
+  if (n.includes('好人') || n.includes('善事') || n.includes('孝敬') || n.includes('尊重')) return '品德社交'
+  
+  // 作息规律
+  if (n.includes('早起') || n.includes('起床') || n.includes('睡觉') || n.includes('早睡')) return '作息规律'
+  if (n.includes('作息') || n.includes('按时') || n.includes('准时')) return '作息规律'
+  
+  // 健康饮食
+  if (n.includes('吃') || n.includes('蔬菜') || n.includes('水果') || n.includes('吃饭')) return '健康饮食'
+  if (n.includes('喝水') || n.includes('营养') || n.includes('不挑食')) return '健康饮食'
   
   return '其他'
 }
