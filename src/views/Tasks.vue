@@ -584,8 +584,40 @@
               <h4>📋 {{ selectedDateDetail.date }} 完成情况</h4>
               <button class="close-detail-btn" @click="closeDateDetail">×</button>
             </div>
-            <div v-if="selectedDateDetail.completed" class="date-detail-content">
-              <div class="completed-badge">✅ 已完成</div>
+            
+            <!-- 组合任务：显示进度 -->
+            <div v-if="selectedTask.task_type === 'combo'" class="date-detail-content">
+              <div v-if="selectedDateDetail.completed" class="completed-badge">✅ 全部完成</div>
+              <div v-else-if="selectedDateDetail.completedRules > 0" class="partial-badge">
+                ⏳ 部分完成 {{ selectedDateDetail.completedRules }}/{{ selectedDateDetail.totalRules }}
+              </div>
+              <div v-else class="incomplete-badge">⚪ 未完成</div>
+              
+              <div v-if="selectedDateDetail.items.length > 0" class="completed-items">
+                <div class="progress-summary" v-if="selectedTask.task_type === 'combo'">
+                  已完成 {{ selectedDateDetail.completedRules }} 项，还需 {{ selectedDateDetail.totalRules - selectedDateDetail.completedRules }} 项
+                </div>
+                <div v-for="(item, idx) in selectedDateDetail.items" :key="idx" class="completed-item">
+                  <span class="item-icon">{{ item.icon }}</span>
+                  <span class="item-name">{{ item.name }}</span>
+                  <span v-if="item.points > 0" class="item-points">+{{ item.points }}</span>
+                </div>
+              </div>
+              
+              <!-- 显示未完成的规则 -->
+              <div v-if="selectedTask.task_type === 'combo' && selectedDateDetail.completedRules < selectedDateDetail.totalRules" class="pending-items">
+                <div class="pending-title">待完成：</div>
+                <div v-for="rule in selectedTask.linkedRules.filter(r => !selectedDateDetail.items.some(i => i.name === r.name))" :key="rule.id" class="pending-item">
+                  <span class="item-icon">⭕</span>
+                  <span class="item-name">{{ rule.name }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 其他任务类型 -->
+            <div v-else class="date-detail-content" :class="{ incomplete: !selectedDateDetail.completed }">
+              <div v-if="selectedDateDetail.completed" class="completed-badge">✅ 已完成</div>
+              <div v-else class="incomplete-badge">⚪ 未完成</div>
               <div v-if="selectedDateDetail.items.length > 0" class="completed-items">
                 <div v-for="(item, idx) in selectedDateDetail.items" :key="idx" class="completed-item">
                   <span class="item-icon">{{ item.icon }}</span>
@@ -593,10 +625,7 @@
                   <span v-if="item.points > 0" class="item-points">+{{ item.points }}</span>
                 </div>
               </div>
-            </div>
-            <div v-else class="date-detail-content incomplete">
-              <div class="incomplete-badge">⚪ 未完成</div>
-              <p class="incomplete-hint">当天没有完成记录</p>
+              <p v-else class="incomplete-hint">当天没有完成记录</p>
             </div>
           </div>
 
@@ -749,16 +778,33 @@ const calendarDays = computed(() => {
   // 获取当月天数
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
 
-  // 获取任务完成历史
+  // 获取任务完成历史和组合任务进度
   const completionHistory = selectedTask.value.progress?.completion_history || []
+  const comboProgress = selectedTask.value.progress?.combo_progress || {}
+  const linkedRules = selectedTask.value.linkedRules || []
 
   for (let i = 1; i <= daysInMonth; i++) {
     const date = new Date(currentYear, currentMonth, i)
     const dateStr = date.toISOString().split('T')[0]
     const isToday = i === today.getDate()
 
-    // 检查当天是否完成
-    const completed = completionHistory.some(h => h.date === dateStr)
+    // 检查当天是否完成 - 优先检查 completion_history
+    let completed = completionHistory.some(h => h.date === dateStr)
+    
+    // 对于组合任务，还需要检查 combo_progress
+    if (!completed && selectedTask.value.task_type === 'combo' && linkedRules.length > 0) {
+      // 检查当天是否有任何关联规则被完成
+      const hasCompletedRules = Object.values(comboProgress).some(
+        data => data.date === dateStr
+      )
+      // 如果完成了所有要求的规则，标记为完成
+      if (hasCompletedRules) {
+        const completedRulesCount = Object.values(comboProgress).filter(
+          data => data.date === dateStr
+        ).length
+        completed = completedRulesCount >= linkedRules.length
+      }
+    }
 
     days.push({
       dayOfMonth: i,
@@ -783,62 +829,68 @@ function getDateDetail(dateStr) {
   // 查找当天的完成记录
   const dayRecord = completionHistory.find(h => h.date === dateStr)
 
-  if (!dayRecord) {
-    // 检查是否有组合任务的进度
-    const completedItems = []
+  // 收集当天完成的项目
+  const completedItems = []
+  
+  if (dayRecord && dayRecord.rule_name) {
+    completedItems.push({
+      name: dayRecord.rule_name,
+      icon: dayRecord.rule_icon || '✓',
+      points: dayRecord.points || 0,
+      completed: true
+    })
+  }
+
+  // 检查组合任务的进度
+  if (selectedTask.value.task_type === 'combo' && linkedRules.length > 0) {
+    linkedRules.forEach(rule => {
+      const ruleProgress = comboProgress[rule.id]
+      const isCompleted = ruleProgress && ruleProgress.date === dateStr
+      
+      // 避免重复添加
+      if (isCompleted && !completedItems.some(item => item.name === rule.name)) {
+        completedItems.push({
+          name: rule.name,
+          icon: rule.icon || '✓',
+          points: rule.points || 0,
+          completed: true
+        })
+      }
+    })
+  } else {
+    // 非组合任务，补充 combo_progress 中的记录
     Object.entries(comboProgress).forEach(([ruleId, data]) => {
       if (data.date === dateStr) {
         const rule = linkedRules.find(r => r.id === ruleId)
-        if (rule) {
+        if (rule && !completedItems.some(i => i.name === rule.name)) {
           completedItems.push({
             name: rule.name,
             icon: rule.icon || '✓',
-            points: rule.points || 0
+            points: rule.points || 0,
+            completed: true
           })
         }
       }
     })
+  }
 
-    if (completedItems.length > 0) {
-      return {
-        date: dateStr,
-        completed: true,
-        items: completedItems
-      }
+  // 如果有完成项目，返回完成状态
+  if (completedItems.length > 0) {
+    // 对于组合任务，检查是否完成了所有规则
+    const allCompleted = selectedTask.value.task_type === 'combo' 
+      ? completedItems.length >= linkedRules.length
+      : true
+      
+    return {
+      date: dateStr,
+      completed: allCompleted,
+      items: completedItems,
+      totalRules: linkedRules.length,
+      completedRules: completedItems.length
     }
-
-    return { date: dateStr, completed: false, items: [] }
   }
 
-  // 有完成记录
-  const items = []
-  if (dayRecord.rule_name) {
-    items.push({
-      name: dayRecord.rule_name,
-      icon: dayRecord.rule_icon || '✓',
-      points: dayRecord.points || 0
-    })
-  }
-
-  // 补充组合任务的记录
-  Object.entries(comboProgress).forEach(([ruleId, data]) => {
-    if (data.date === dateStr) {
-      const rule = linkedRules.find(r => r.id === ruleId)
-      if (rule && !items.some(i => i.name === rule.name)) {
-        items.push({
-          name: rule.name,
-          icon: rule.icon || '✓',
-          points: rule.points || 0
-        })
-      }
-    }
-  })
-
-  return {
-    date: dateStr,
-    completed: true,
-    items
-  }
+  return { date: dateStr, completed: false, items: [], totalRules: linkedRules.length, completedRules: 0 }
 }
 
 // 点击日历日期
@@ -2576,6 +2628,16 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 
+.partial-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
 .incomplete-badge {
   display: inline-block;
   padding: 8px 20px;
@@ -2584,6 +2646,40 @@ onMounted(async () => {
   border-radius: 20px;
   font-weight: 600;
   margin-bottom: 12px;
+}
+
+.progress-summary {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #e7f3ff;
+  border-radius: 8px;
+}
+
+.pending-items {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed #ddd;
+}
+
+.pending-title {
+  font-size: 0.85rem;
+  color: #868e96;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #f1f3f5;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  opacity: 0.7;
 }
 
 .incomplete-hint {

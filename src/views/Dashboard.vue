@@ -946,6 +946,8 @@ async function addBehavior() {
     }
     
     // 2. 检查并更新关联的任务进度
+    const today = new Date().toISOString().split('T')[0]
+    
     for (const task of linkedTasks.value) {
       const { data: progress } = await supabase
         .from('task_progress')
@@ -954,7 +956,88 @@ async function addBehavior() {
         .eq('child_id', selectedChildId.value)
         .single()
       
-      if (progress && progress.status !== 'completed') {
+      if (!progress || progress.status === 'completed') continue
+      
+      // 组合任务：更新 combo_progress
+      if (task.task_type === 'combo' && task.linked_rule_ids) {
+        const currentComboProgress = progress.combo_progress || {}
+        
+        // 记录每个完成的规则
+        for (const behavior of selectedBehaviors.value) {
+          if (task.linked_rule_ids.includes(behavior.id)) {
+            currentComboProgress[behavior.id] = {
+              date: today,
+              completed: true
+            }
+          }
+        }
+        
+        // 检查当天是否完成了所有要求的规则
+        const completedRulesToday = Object.values(currentComboProgress).filter(
+          data => data.date === today
+        ).length
+        
+        const allRulesCompleted = completedRulesToday >= task.linked_rule_ids.length
+        
+        // 更新任务进度
+        await supabase.from('task_progress').update({
+          combo_progress: currentComboProgress,
+          current_count: allRulesCompleted ? (progress.current_count || 0) + 1 : (progress.current_count || 0),
+          status: allRulesCompleted && (progress.current_count || 0) + 1 >= (task.target_count || 7) ? 'completed' : 'active'
+        }).eq('id', progress.id)
+        
+        // 如果任务完成，更新任务状态
+        if (allRulesCompleted && (progress.current_count || 0) + 1 >= (task.target_count || 7)) {
+          await supabase.from('tasks').update({
+            status: 'completed'
+          }).eq('id', task.id)
+        }
+      }
+      // 连续任务：更新 completion_history
+      else if (task.task_type === 'continuous') {
+        const completionHistory = progress.completion_history || []
+        
+        // 检查今天是否已记录
+        const alreadyRecorded = completionHistory.some(h => h.date === today)
+        
+        if (!alreadyRecorded) {
+          completionHistory.push({
+            date: today,
+            rule_name: behaviorNames[0],
+            points: totalPoints
+          })
+          
+          const streakCount = completionHistory.length
+          
+          await supabase.from('task_progress').update({
+            completion_history: completionHistory,
+            streak_count: streakCount,
+            status: streakCount >= (task.target_streak || 7) ? 'completed' : 'active'
+          }).eq('id', progress.id)
+          
+          if (streakCount >= (task.target_streak || 7)) {
+            await supabase.from('tasks').update({
+              status: 'completed'
+            }).eq('id', task.id)
+          }
+        }
+      }
+      // 累计任务
+      else if (task.task_type === 'cumulative') {
+        const newCount = (progress.current_count || 0) + 1
+        await supabase.from('task_progress').update({
+          current_count: newCount,
+          status: newCount >= (task.target_count || 5) ? 'completed' : 'active'
+        }).eq('id', progress.id)
+        
+        if (newCount >= (task.target_count || 5)) {
+          await supabase.from('tasks').update({
+            status: 'completed'
+          }).eq('id', task.id)
+        }
+      }
+      // 单次任务
+      else {
         await supabase.from('task_progress').update({
           status: 'completed',
           completed_at: new Date().toISOString(),
