@@ -18,8 +18,8 @@
     <!-- 过滤器 -->
     <div class="filter-section">
       <div class="filter-tabs">
-        <button 
-          v-for="tab in filterTabs" 
+        <button
+          v-for="tab in filterTabs"
           :key="tab.value"
           class="filter-tab"
           :class="{ active: currentFilter === tab.value }"
@@ -31,15 +31,15 @@
         </button>
       </div>
       <div class="view-toggle">
-        <button 
-          class="toggle-btn" 
+        <button
+          class="toggle-btn"
           :class="{ active: viewMode === 'grid' }"
           @click="viewMode = 'grid'"
         >
           ⊞ 卡片
         </button>
-        <button 
-          class="toggle-btn" 
+        <button
+          class="toggle-btn"
           :class="{ active: viewMode === 'list' }"
           @click="viewMode = 'list'"
         >
@@ -64,8 +64,8 @@
 
     <!-- 卡片视图 -->
     <div v-else-if="viewMode === 'grid'" class="tasks-grid">
-      <div 
-        v-for="task in filteredTasks" 
+      <div
+        v-for="task in filteredTasks"
         :key="task.id"
         class="task-card"
         :class="[getTaskTypeClass(task.task_type), task.status]"
@@ -101,8 +101,8 @@
               <span class="progress-value">{{ task.progress?.streak_count || 0 }} / {{ task.target_streak || 7 }} 天</span>
             </div>
             <div class="progress-bar">
-              <div 
-                class="progress-fill continuous" 
+              <div
+                class="progress-fill continuous"
                 :style="{ width: Math.min(((task.progress?.streak_count || 0) / (task.target_streak || 7)) * 100, 100) + '%' }"
               ></div>
             </div>
@@ -123,8 +123,8 @@
               <span class="progress-value">{{ task.progress?.current_count || 0 }} / {{ task.target_count || 5 }} 次</span>
             </div>
             <div class="progress-bar">
-              <div 
-                class="progress-fill cumulative" 
+              <div
+                class="progress-fill cumulative"
                 :style="{ width: Math.min(((task.progress?.current_count || 0) / (task.target_count || 5)) * 100, 100) + '%' }"
               ></div>
             </div>
@@ -138,8 +138,8 @@
             </div>
             <!-- 子项矩阵 -->
             <div v-if="task.linkedRules" class="combo-matrix">
-              <div 
-                v-for="rule in task.linkedRules" 
+              <div
+                v-for="rule in task.linkedRules"
                 :key="rule.id"
                 class="combo-item"
                 :class="{ completed: isRuleCompletedToday(rule.id, task) }"
@@ -155,8 +155,8 @@
             <div class="combo-today-detail">
               <div class="today-title">📅 今日完成明细</div>
               <div v-if="task.linkedRules?.length > 0" class="today-items">
-                <div 
-                  v-for="rule in task.linkedRules" 
+                <div
+                  v-for="rule in task.linkedRules"
                   :key="rule.id"
                   class="today-item"
                   :class="{ completed: isRuleCompletedToday(rule.id, task) }"
@@ -172,7 +172,7 @@
                 未关联行为规则
               </div>
             </div>
-            
+
             <!-- 今日完成提示 -->
             <div class="combo-today-status">
               <span v-if="getTodayCompletedCount(task) === task.linkedRules?.length && task.linkedRules?.length > 0" class="status-completed">
@@ -211,7 +211,7 @@
 
         <!-- 操作按钮 -->
         <div class="task-actions">
-          <button 
+          <button
             v-if="task.status === 'active'"
             class="btn btn-check"
             @click.stop="checkProgress(task)"
@@ -220,8 +220,8 @@
             <span v-if="checkingTask === task.id">⏳</span>
             <span v-else>✅ 更新进度</span>
           </button>
-          
-          <button 
+
+          <button
             v-if="task.status === 'completed' && !task.progress?.reward_claimed"
             class="btn btn-claim"
             @click.stop="claimReward(task)"
@@ -230,19 +230,19 @@
             <span v-if="claimingTask === task.id">⏳</span>
             <span v-else>🎁 领取奖励</span>
           </button>
-          
-          <button 
+
+          <button
             v-if="task.progress?.reward_claimed"
             class="btn btn-claimed"
             disabled
           >
             ✓ 已领取
           </button>
-          
+
           <button class="btn btn-edit" @click.stop="editTask(task)">
             ✏️ 编辑
           </button>
-          
+
           <button class="btn btn-delete" @click.stop="deleteTask(task)">
             🗑️ 删除
           </button>
@@ -252,8 +252,8 @@
 
     <!-- 列表视图 -->
     <div v-else class="tasks-list">
-      <div 
-        v-for="task in filteredTasks" 
+      <div
+        v-for="task in filteredTasks"
         :key="task.id"
         class="task-list-item"
         :class="task.status"
@@ -269,12 +269,12 @@
             </span>
           </div>
         </div>
-        
+
         <div class="list-reward">
           +{{ task.reward_points || 0 }}💰
           <span v-if="task.reward_gems" class="list-gems">+{{ task.reward_gems }}💎</span>
         </div>
-        
+
         <div class="list-status" :class="task.status">
           {{ getStatusText(task.status) }}
         </div>
@@ -288,24 +288,24 @@
           <h3>{{ editingTask ? '✏️ 编辑任务' : '📝 发布新任务' }}</h3>
           <button class="close-btn" @click="closeModal">&times;</button>
         </div>
-        
+
         <form @submit.prevent="saveTask">
           <!-- 任务名称 -->
           <div class="form-group">
             <label>任务名称 *</label>
-            <input 
-              v-model="taskForm.title" 
-              required 
+            <input
+              v-model="taskForm.title"
+              required
               placeholder="例如：早起挑战、阅读周计划"
             >
           </div>
-          
+
           <!-- 任务类型 -->
           <div class="form-group">
             <label>任务类型 *</label>
             <div class="type-selector">
-              <button 
-                v-for="type in taskTypes" 
+              <button
+                v-for="type in taskTypes"
                 :key="type.value"
                 type="button"
                 class="type-btn"
@@ -320,16 +320,16 @@
               </button>
             </div>
           </div>
-          
+
           <!-- 动态配置：根据任务类型显示不同选项 -->
           <div v-if="taskForm.task_type === 'continuous'" class="form-group">
             <label>连续天数目标 *</label>
             <div class="number-input">
               <button type="button" @click="taskForm.target_streak = Math.max(1, taskForm.target_streak - 1)">-</button>
-              <input 
-                v-model.number="taskForm.target_streak" 
-                type="number" 
-                min="1" 
+              <input
+                v-model.number="taskForm.target_streak"
+                type="number"
+                min="1"
                 max="30"
               >
               <button type="button" @click="taskForm.target_streak = Math.min(30, taskForm.target_streak + 1)">+</button>
@@ -337,14 +337,14 @@
             </div>
             <small class="form-hint">连续打卡达到目标天数即可获得奖励，中断需重新计数</small>
           </div>
-          
+
           <div v-if="taskForm.task_type === 'cumulative'" class="form-group">
             <label>累计次数目标 *</label>
             <div class="number-input">
               <button type="button" @click="taskForm.target_count = Math.max(1, taskForm.target_count - 1)">-</button>
-              <input 
-                v-model.number="taskForm.target_count" 
-                type="number" 
+              <input
+                v-model.number="taskForm.target_count"
+                type="number"
                 min="1"
               >
               <button type="button" @click="taskForm.target_count = taskForm.target_count + 1">+</button>
@@ -352,7 +352,7 @@
             </div>
             <small class="form-hint">累计完成指定次数即可获得奖励</small>
           </div>
-          
+
           <div v-if="taskForm.task_type === 'combo'" class="form-group">
             <label>需要完成天数 *</label>
             <div class="number-input">
@@ -361,32 +361,32 @@
               <button type="button" @click="taskForm.target_count = Math.min(30, taskForm.target_count + 1)">+</button>
               <span class="unit">天</span>
             </div>
-            
+
             <small class="form-hint">每天完成所有子任务，坚持达到目标天数</small>
           </div>
-          
+
           <!-- 任务周期 -->
           <div class="form-row">
             <div class="form-group">
               <label>开始日期</label>
               <input v-model="taskForm.cycle_start" type="date">
             </div>
-            
+
             <div class="form-group">
               <label>结束日期</label>
               <input v-model="taskForm.cycle_end" type="date">
             </div>
           </div>
-          
+
           <!-- 奖励设置 -->
           <div class="form-group">
             <label>完成奖励金币 *</label>
             <div class="number-input">
               <button type="button" @click="taskForm.reward_points = Math.max(0, taskForm.reward_points - 5)">-</button>
-              <input 
-                v-model.number="taskForm.reward_points" 
-                type="number" 
-                min="0" 
+              <input
+                v-model.number="taskForm.reward_points"
+                type="number"
+                min="0"
                 step="5"
                 required
               >
@@ -394,16 +394,16 @@
               <span class="unit">金币</span>
             </div>
           </div>
-          
+
           <!-- 宝石奖励 -->
           <div class="form-group">
             <label>🏆 特殊奖励宝石（可选）</label>
             <div class="number-input gem-input">
               <button type="button" @click="taskForm.reward_gems = Math.max(0, (taskForm.reward_gems || 0) - 1)">-</button>
-              <input 
-                v-model.number="taskForm.reward_gems" 
-                type="number" 
-                min="0" 
+              <input
+                v-model.number="taskForm.reward_gems"
+                type="number"
+                min="0"
                 step="1"
                 placeholder="0"
               >
@@ -412,7 +412,7 @@
             </div>
             <small class="form-hint">宝石用于兑换特殊奖品，只能通过完成复杂任务获得</small>
           </div>
-          
+
           <!-- 关联行为规则（所有任务类型） -->
           <div class="form-group">
             <label>关联行为规则</label>
@@ -421,14 +421,14 @@
                 请先前往"行为规则"页面创建规则
               </div>
               <div v-else class="rules-checkboxes">
-                <label 
-                  v-for="rule in availableRules" 
+                <label
+                  v-for="rule in availableRules"
                   :key="rule.id"
                   class="rule-checkbox"
                   :class="{ checked: taskForm.linked_rule_ids.includes(rule.id) }"
                 >
-                  <input 
-                    type="checkbox" 
+                  <input
+                    type="checkbox"
                     :value="rule.id"
                     v-model="taskForm.linked_rule_ids"
                   >
@@ -440,29 +440,29 @@
             </div>
             <small class="form-hint">关联后，记录对应行为时将自动同步任务进度</small>
           </div>
-          
+
           <!-- 任务描述 -->
           <div class="form-group">
             <label>任务描述</label>
-            <textarea 
-              v-model="taskForm.description" 
-              rows="3" 
+            <textarea
+              v-model="taskForm.description"
+              rows="3"
               placeholder="详细描述任务要求和注意事项..."
             ></textarea>
           </div>
-          
+
           <!-- 分配给孩子 -->
           <div class="form-group">
             <label>分配给孩子</label>
             <div class="child-selector">
-              <label 
-                v-for="child in children" 
+              <label
+                v-for="child in children"
                 :key="child.id"
                 class="child-checkbox"
                 :class="{ checked: taskForm.child_ids.includes(child.id) }"
               >
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   :value="child.id"
                   v-model="taskForm.child_ids"
                 >
@@ -470,7 +470,7 @@
               </label>
             </div>
           </div>
-          
+
           <div class="modal-actions">
             <button type="button" class="btn btn-secondary" @click="closeModal">
               取消
@@ -491,56 +491,56 @@
           <h3>{{ selectedTask?.title }}</h3>
           <button class="close-btn" @click="closeDetailModal">&times;</button>
         </div>
-        
+
         <div v-if="selectedTask" class="detail-content">
           <!-- 任务信息 -->
           <div class="detail-info">
             <div class="detail-type">
               <span class="type-icon">{{ getTaskTypeIcon(selectedTask.task_type) }}</span>
               <span>{{ getTaskTypeText(selectedTask.task_type) }}</span>
-            </div>            
-            
+            </div>
+
             <p v-if="selectedTask.description" class="detail-desc">
               {{ selectedTask.description }}
             </p>
           </div>
-          
+
           <!-- 进度详情 -->
           <div class="detail-progress">
-            <h4>📊 任务进度</h4>            
+            <h4>📊 任务进度</h4>
             <div v-if="selectedTask.task_type === 'continuous'" class="progress-stats">
               <div class="stat-row">
                 <span>当前连续：</span>
                 <span class="stat-value">{{ selectedTask.progress?.streak_count || 0 }} 天</span>
               </div>
-              
+
               <div class="stat-row">
                 <span>目标连续：</span>
                 <span class="stat-value">{{ selectedTask.target_streak || 7 }} 天</span>
               </div>
-              
+
               <div class="stat-row">
                 <span>最长连续：</span>
                 <span class="stat-value">{{ selectedTask.progress?.longest_streak || 0 }} 天</span>
               </div>
             </div>
-            
+
             <div v-else-if="selectedTask.task_type === 'cumulative'" class="progress-stats">
               <div class="stat-row">
                 <span>当前进度：</span>
                 <span class="stat-value">{{ selectedTask.progress?.current_count || 0 }} 次</span>
               </div>
-              
+
               <div class="stat-row">
                 <span>目标次数：</span>
                 <span class="stat-value">{{ selectedTask.target_count || 5 }} 次</span>
               </div>
             </div>
-            
+
             <div v-else-if="selectedTask.task_type === 'combo'" class="combo-detail">
               <div class="combo-rules">
-                <div 
-                  v-for="rule in selectedTask.linkedRules" 
+                <div
+                  v-for="rule in selectedTask.linkedRules"
                   :key="rule.id"
                   class="combo-rule-item"
                 >
@@ -550,30 +550,62 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 日历视图 -->
           <div class="detail-calendar">
-            <h4>📅 完成日历</h4>            
+            <h4>📅 完成日历 <span class="calendar-hint">（点击日期查看明细）</span></h4>
             <div class="calendar-grid">
-              <div 
-                v-for="day in calendarDays" 
+              <div
+                v-for="day in calendarDays"
                 :key="day.date"
                 class="calendar-day"
-                :class="{ completed: day.completed, today: day.isToday }"
+                :class="{ 
+                  completed: day.completed, 
+                  today: day.isToday,
+                  selected: selectedDateDetail?.date === day.date 
+                }"
                 :title="day.tooltip"
+                @click="onCalendarDayClick(day)"
               >
                 <span class="day-number">{{ day.dayOfMonth }}</span>
-                <span v-if="day.completed" class="day-check">✓</span>
+                <span class="status-dot" :class="day.completed ? 'completed-dot' : 'incomplete-dot'"></span>
               </div>
+            </div>
+            <div class="calendar-legend">
+              <span class="legend-item"><span class="dot completed-dot"></span> 已完成</span>
+              <span class="legend-item"><span class="dot incomplete-dot"></span> 未完成</span>
+              <span class="legend-item"><span class="dot today-dot"></span> 今天</span>
             </div>
           </div>
           
+          <!-- 日期详情 -->
+          <div v-if="selectedDateDetail" class="date-detail-panel">
+            <div class="date-detail-header">
+              <h4>📋 {{ selectedDateDetail.date }} 完成情况</h4>
+              <button class="close-detail-btn" @click="closeDateDetail">×</button>
+            </div>
+            <div v-if="selectedDateDetail.completed" class="date-detail-content">
+              <div class="completed-badge">✅ 已完成</div>
+              <div v-if="selectedDateDetail.items.length > 0" class="completed-items">
+                <div v-for="(item, idx) in selectedDateDetail.items" :key="idx" class="completed-item">
+                  <span class="item-icon">{{ item.icon }}</span>
+                  <span class="item-name">{{ item.name }}</span>
+                  <span v-if="item.points > 0" class="item-points">+{{ item.points }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="date-detail-content incomplete">
+              <div class="incomplete-badge">⚪ 未完成</div>
+              <p class="incomplete-hint">当天没有完成记录</p>
+            </div>
+          </div>
+
           <!-- 最近完成记录 -->
           <div class="detail-history" v-if="taskCompletionHistory.length > 0">
             <h4>📋 最近完成记录</h4>
             <div class="history-list">
-              <div 
-                v-for="(record, index) in taskCompletionHistory" 
+              <div
+                v-for="(record, index) in taskCompletionHistory"
                 :key="index"
                 class="history-item"
               >
@@ -582,8 +614,8 @@
                   <span v-if="record.items" class="item-count">{{ record.items.length }} 项</span>
                 </div>
                 <div class="history-items">
-                  <span 
-                    v-for="(item, idx) in record.items || []" 
+                  <span
+                    v-for="(item, idx) in record.items || []"
                     :key="idx"
                     class="history-tag"
                   >
@@ -596,15 +628,15 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 奖励信息 -->
           <div class="detail-reward">
-            <h4>🎁 完成奖励</h4>            
+            <h4>🎁 完成奖励</h4>
             <div class="reward-display">
               <span class="reward-amount">{{ selectedTask.reward_points || 0 }}💰</span>
               <span v-if="selectedTask.reward_gems" class="reward-gems-amount">+{{ selectedTask.reward_gems }}💎</span>
             </div>
-            
+
             <div v-if="selectedTask.progress?.reward_claimed" class="claimed-info">
               ✅ 已于 {{ formatDate(selectedTask.progress.reward_claimed_at) }} 领取
             </div>
@@ -618,10 +650,10 @@
 <script setup>
 import { ref, onMounted, computed, reactive } from 'vue'
 import { supabase } from '../utils/supabase.js'
-import { 
-  TaskTypes, 
+import {
+  TaskTypes,
   TaskStatus,
-  getTaskTypeText, 
+  getTaskTypeText,
   getTaskTypeIcon,
   getTaskStatusText,
   getRemainingDays,
@@ -639,6 +671,7 @@ const showCreateModal = ref(false)
 const showDetailModal = ref(false)
 const editingTask = ref(null)
 const selectedTask = ref(null)
+const selectedDateDetail = ref(null)  // 选中的日期详情
 const saving = ref(false)
 const checkingTask = ref(null)
 const claimingTask = ref(null)
@@ -670,27 +703,27 @@ const filterTabs = computed(() => [
 
 // 任务类型选项
 const taskTypes = [
-  { 
-    value: 'single', 
-    label: '单次任务', 
+  {
+    value: 'single',
+    label: '单次任务',
     icon: '📋',
     desc: '完成一次即结束，简单直接'
   },
-  { 
-    value: 'continuous', 
-    label: '连续挑战', 
+  {
+    value: 'continuous',
+    label: '连续挑战',
     icon: '🔥',
     desc: '连续N天完成，中断需重新计数'
   },
-  { 
-    value: 'cumulative', 
-    label: '累计任务', 
+  {
+    value: 'cumulative',
+    label: '累计任务',
     icon: '📊',
     desc: '累计完成N次，可间断'
   },
-  { 
-    value: 'combo', 
-    label: '组合套餐', 
+  {
+    value: 'combo',
+    label: '组合套餐',
     icon: '🎯',
     desc: '每天完成多个子任务'
   }
@@ -707,26 +740,26 @@ const filteredTasks = computed(() => {
 // 日历数据
 const calendarDays = computed(() => {
   if (!selectedTask.value) return []
-  
+
   const days = []
   const today = new Date()
   const currentMonth = today.getMonth()
   const currentYear = today.getFullYear()
-  
+
   // 获取当月天数
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
-  
+
   // 获取任务完成历史
   const completionHistory = selectedTask.value.progress?.completion_history || []
-  
+
   for (let i = 1; i <= daysInMonth; i++) {
     const date = new Date(currentYear, currentMonth, i)
     const dateStr = date.toISOString().split('T')[0]
     const isToday = i === today.getDate()
-    
+
     // 检查当天是否完成
     const completed = completionHistory.some(h => h.date === dateStr)
-    
+
     days.push({
       dayOfMonth: i,
       date: dateStr,
@@ -735,9 +768,88 @@ const calendarDays = computed(() => {
       tooltip: completed ? `✅ ${dateStr} 已完成` : dateStr
     })
   }
-  
+
   return days
 })
+
+// 获取指定日期的完成详情
+function getDateDetail(dateStr) {
+  if (!selectedTask.value || !dateStr) return null
+
+  const completionHistory = selectedTask.value.progress?.completion_history || []
+  const comboProgress = selectedTask.value.progress?.combo_progress || {}
+  const linkedRules = selectedTask.value.linkedRules || []
+
+  // 查找当天的完成记录
+  const dayRecord = completionHistory.find(h => h.date === dateStr)
+
+  if (!dayRecord) {
+    // 检查是否有组合任务的进度
+    const completedItems = []
+    Object.entries(comboProgress).forEach(([ruleId, data]) => {
+      if (data.date === dateStr) {
+        const rule = linkedRules.find(r => r.id === ruleId)
+        if (rule) {
+          completedItems.push({
+            name: rule.name,
+            icon: rule.icon || '✓',
+            points: rule.points || 0
+          })
+        }
+      }
+    })
+
+    if (completedItems.length > 0) {
+      return {
+        date: dateStr,
+        completed: true,
+        items: completedItems
+      }
+    }
+
+    return { date: dateStr, completed: false, items: [] }
+  }
+
+  // 有完成记录
+  const items = []
+  if (dayRecord.rule_name) {
+    items.push({
+      name: dayRecord.rule_name,
+      icon: dayRecord.rule_icon || '✓',
+      points: dayRecord.points || 0
+    })
+  }
+
+  // 补充组合任务的记录
+  Object.entries(comboProgress).forEach(([ruleId, data]) => {
+    if (data.date === dateStr) {
+      const rule = linkedRules.find(r => r.id === ruleId)
+      if (rule && !items.some(i => i.name === rule.name)) {
+        items.push({
+          name: rule.name,
+          icon: rule.icon || '✓',
+          points: rule.points || 0
+        })
+      }
+    }
+  })
+
+  return {
+    date: dateStr,
+    completed: true,
+    items
+  }
+}
+
+// 点击日历日期
+function onCalendarDayClick(day) {
+  selectedDateDetail.value = getDateDetail(day.date)
+}
+
+// 关闭日期详情
+function closeDateDetail() {
+  selectedDateDetail.value = null
+}
 
 // 加载任务
 async function loadTasks() {
@@ -745,26 +857,26 @@ async function loadTasks() {
     // 获取当前用户
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
-    
+
     // 获取今天日期
     const today = new Date().toISOString().split('T')[0]
-    
+
     // 获取任务列表（带 user_id 过滤）
     const { data: tasksData, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-    
+
     if (error) throw error
-    
+
     console.log('🔄 加载任务:', tasksData?.length || 0, '个')
-    
+
     // 获取每个任务的进度
     const tasksWithProgress = await Promise.all(
       (tasksData || []).map(async (task) => {
         console.log(`  - ${task.title}: ${task.task_type}, linkedIds:`, task.linked_rule_ids)
-        
+
         // 获取任务进度（带 user_id 过滤）
         const { data: progress } = await supabase
           .from('task_progress')
@@ -772,21 +884,21 @@ async function loadTasks() {
           .eq('task_id', task.id)
           .eq('user_id', user.id)
           .maybeSingle()
-        
+
         // 如果是组合任务，获取关联的规则详情
         let linkedRules = []
         let todayCompletions = {}
-        
+
         if (task.linked_rule_ids?.length > 0) {
           console.log(`    查询 ${task.linked_rule_ids.length} 个规则...`, task.linked_rule_ids)
           console.log(`    当前用户ID:`, user.id)
-          
+
           // 先查询所有规则（不带用户过滤）看看是否存在
           const { data: allRules, error: allError } = await supabase
             .from('rules')
             .select('id, name, user_id')
             .in('id', task.linked_rule_ids)
-          
+
           if (allError) {
             console.error('    查询所有规则失败:', allError)
           } else {
@@ -795,21 +907,21 @@ async function loadTasks() {
               console.log(`      - ${r.name} (${r.id}): 用户=${r.user_id}`)
             })
           }
-          
+
           // 再按用户过滤查询
           const { data: rules, error: rulesError } = await supabase
             .from('rules')
             .select('*')
             .in('id', task.linked_rule_ids)
             .eq('user_id', user.id)
-          
+
           if (rulesError) {
             console.error('    查询用户规则失败:', rulesError)
           } else {
             linkedRules = rules || []
             console.log(`    用户权限过滤后找到 ${linkedRules.length} 个规则`)
           }
-          
+
           // 查询今日每个规则的完成状态
           if (progress) {
             for (const childId of task.child_ids || []) {
@@ -821,7 +933,7 @@ async function loadTasks() {
                 .eq('type', 'earn')
                 .gte('created_at', today)
                 .lt('created_at', today + 'T23:59:59')
-              
+
               for (const tx of (txData || [])) {
                 if (tx.rule_id) {
                   todayCompletions[tx.rule_id] = true
@@ -830,7 +942,7 @@ async function loadTasks() {
             }
           }
         }
-        
+
         return {
           ...task,
           progress: progress || null,
@@ -839,7 +951,7 @@ async function loadTasks() {
         }
       })
     )
-    
+
     tasks.value = tasksWithProgress
   } catch (error) {
     console.error('加载任务失败:', error)
@@ -868,12 +980,12 @@ async function createMockData() {
     console.log('没有孩子，跳过创建Mock数据')
     return
   }
-  
+
   const result = await createMockSuperWeekChallenge(
     children.value[0].id,
     (await supabase.auth.getUser()).data.user?.id
   )
-  
+
   if (result.success) {
     console.log('✅ Mock数据创建成功')
     await loadTasks()
@@ -911,7 +1023,7 @@ function resetForm() {
 // 选择任务类型
 function selectTaskType(type) {
   taskForm.task_type = type
-  
+
   // 根据类型设置默认值
   switch (type) {
     case 'continuous':
@@ -941,24 +1053,24 @@ async function saveTask() {
       cycle_end: taskForm.cycle_end || null,
       icon: taskForm.icon
     }
-    
+
     // 根据类型设置特定字段
     if (taskForm.task_type === 'continuous') {
       taskData.target_streak = taskForm.target_streak
     } else if (taskForm.task_type === 'cumulative' || taskForm.task_type === 'combo') {
       taskData.target_count = taskForm.target_count
     }
-    
+
     // 所有任务类型都支持关联行为规则
     taskData.linked_rule_ids = taskForm.linked_rule_ids
-    
+
     console.log('💾 保存任务:', {
       title: taskData.title,
       type: taskData.task_type,
       linkedIds: taskData.linked_rule_ids,
       childIds: taskForm.child_ids
     })
-    
+
     if (editingTask.value) {
       // 更新任务
       const { error } = await supabase
@@ -968,13 +1080,13 @@ async function saveTask() {
           linked_rule_ids: taskForm.linked_rule_ids
         })
         .eq('id', editingTask.value.id)
-      
+
       if (error) throw error
     } else {
       // 创建任务
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('未登录')
-      
+
       const { data: newTask, error } = await supabase
         .from('tasks')
         .insert({
@@ -984,14 +1096,14 @@ async function saveTask() {
         })
         .select()
         .single()
-      
+
       if (error) {
         console.error('❌ 创建任务失败:', error)
         throw error
       }
-      
+
       console.log('✅ 任务创建成功:', newTask.id, 'linkedIds:', newTask.linked_rule_ids)
-      
+
       // 为每个孩子创建进度记录
       for (const childId of taskForm.child_ids) {
         await supabase.from('task_progress').insert({
@@ -1003,7 +1115,7 @@ async function saveTask() {
         })
       }
     }
-    
+
     await loadTasks()
     closeModal()
   } catch (error) {
@@ -1027,19 +1139,19 @@ function editTask(task) {
   taskForm.reward_points = task.reward_points || task.points || 20
   taskForm.description = task.description || ''
   taskForm.icon = task.icon || '📋'
-  
+
   showCreateModal.value = true
 }
 
 // 检查进度（手动触发）
 async function checkProgress(task) {
   if (!task.progress) return
-  
+
   checkingTask.value = task.id
   try {
     // 模拟检查进度（实际应基于行为记录自动触发）
     console.log('检查进度:', task.title)
-    
+
     // 重新加载任务
     await loadTasks()
   } catch (error) {
@@ -1052,16 +1164,16 @@ async function checkProgress(task) {
 // 领取奖励
 async function claimReward(task) {
   if (!task.progress) return
-  
+
   claimingTask.value = task.id
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
-    
+
     const rewardPoints = task.reward_points || 0
     const rewardGems = task.reward_gems || 0
     const childId = task.progress.child_id
-    
+
     // 1. 创建交易记录（奖励金币）
     const { error: txError } = await supabase.from('transactions').insert({
       child_id: childId,
@@ -1071,16 +1183,16 @@ async function claimReward(task) {
       rule_id: null,
       user_id: user.id
     })
-    
+
     if (txError) throw txError
-    
+
     // 2. 更新孩子的金币和宝石
     const { data: child } = await supabase
       .from('children')
       .select('current_balance, total_points, gem_balance')
       .eq('id', childId)
       .single()
-    
+
     if (child) {
       const updateData = {
         current_balance: child.current_balance + rewardPoints,
@@ -1090,19 +1202,19 @@ async function claimReward(task) {
       if (rewardGems > 0) {
         updateData.gem_balance = (child.gem_balance || 0) + rewardGems
       }
-      
+
       await supabase
         .from('children')
         .update(updateData)
         .eq('id', childId)
     }
-    
+
     // 3. 更新任务进度为已领取
     await supabase
       .from('task_progress')
       .update({ reward_claimed: true })
       .eq('id', task.progress.id)
-    
+
     // 4. 如果有宝石奖励，创建宝石获得记录
     if (rewardGems > 0) {
       const { error: gemError } = await supabase.from('gem_transactions').insert({
@@ -1114,7 +1226,7 @@ async function claimReward(task) {
       })
       if (gemError) console.error('宝石记录创建失败:', gemError)
     }
-    
+
     let successMsg = `🎉 恭喜！任务"${task.title}"完成！获得 ${rewardPoints} 金币`
     if (rewardGems > 0) {
       successMsg += ` + ${rewardGems}💎 宝石`
@@ -1134,34 +1246,34 @@ async function deleteTask(task) {
   if (!confirm(`确定要删除任务"${task.title}"吗？\n此操作不可恢复！`)) {
     return
   }
-  
+
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
-    
+
     // 1. 删除任务进度记录
     await supabase
       .from('task_progress')
       .delete()
       .eq('task_id', task.id)
       .eq('user_id', user.id)
-    
+
     // 2. 删除任务完成记录
     await supabase
       .from('task_completions')
       .delete()
       .eq('task_id', task.id)
       .eq('user_id', user.id)
-    
+
     // 3. 删除任务
     const { error } = await supabase
       .from('tasks')
       .delete()
       .eq('id', task.id)
       .eq('user_id', user.id)
-    
+
     if (error) throw error
-    
+
     alert('✅ 任务已删除')
     await loadTasks()
   } catch (error) {
@@ -1185,14 +1297,14 @@ function closeDetailModal() {
 // 任务完成历史（用于详情弹窗）
 const taskCompletionHistory = computed(() => {
   if (!selectedTask.value) return []
-  
+
   const history = selectedTask.value.progress?.completion_history || []
   const comboProgress = selectedTask.value.progress?.combo_progress || {}
   const linkedRules = selectedTask.value.linkedRules || []
-  
+
   // 按日期分组
   const recordsByDate = {}
-  
+
   // 处理 completion_history
   history.forEach(h => {
     if (!recordsByDate[h.date]) {
@@ -1205,7 +1317,7 @@ const taskCompletionHistory = computed(() => {
       })
     }
   })
-  
+
   // 处理 combo_progress（关联规则完成情况）
   Object.entries(comboProgress).forEach(([ruleId, data]) => {
     if (data.date) {
@@ -1225,7 +1337,7 @@ const taskCompletionHistory = computed(() => {
       }
     }
   })
-  
+
   // 转换为数组并按日期倒序排列（最新的在前），取最近10条
   return Object.values(recordsByDate)
     .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -1255,29 +1367,29 @@ function getTodayCompletedCount(task) {
   if (task.todayCompletions) {
     return Object.keys(task.todayCompletions).length
   }
-  
+
   // 回退到 combo_progress 检测
   if (!task.progress?.combo_progress) return 0
-  
+
   const today = new Date().toISOString().split('T')[0]
   let count = 0
-  
+
   for (const key in task.progress.combo_progress) {
     if (task.progress.combo_progress[key].date === today) {
       count++
     }
   }
-  
+
   return count
 }
 
 function isRuleCompletedToday(ruleId, task) {
   // 优先使用今日交易记录检测
   if (task.todayCompletions?.[ruleId]) return true
-  
+
   // 回退到 combo_progress 检测
   if (!task.progress?.combo_progress) return false
-  
+
   const today = new Date().toISOString().split('T')[0]
   return task.progress.combo_progress[ruleId]?.date === today
 }
@@ -1294,7 +1406,7 @@ onMounted(async () => {
     loadChildren(),
     loadRules()
   ])
-  
+
   // 如果没有任务，创建Mock数据
   if (tasks.value.length === 0 && children.value.length > 0) {
     await createMockData()
@@ -2303,7 +2415,7 @@ onMounted(async () => {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 4px;
+  gap: 6px;
 }
 
 .calendar-day {
@@ -2313,19 +2425,26 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   background: #f8f9fa;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.85rem;
   position: relative;
   cursor: pointer;
   transition: all 0.3s;
+  padding: 4px;
 }
 
 .calendar-day:hover {
   background: #e7f3ff;
+  transform: scale(1.05);
 }
 
-.calendar-day.completed {
-  background: #d3f9d8;
+.calendar-day.selected {
+  background: #667eea;
+  color: white;
+}
+
+.calendar-day.selected .day-number {
+  color: white;
 }
 
 .calendar-day.today {
@@ -2334,13 +2453,177 @@ onMounted(async () => {
 
 .day-number {
   font-size: 0.9rem;
+  font-weight: 600;
+  color: #495057;
 }
 
-.day-check {
-  position: absolute;
-  bottom: 2px;
-  font-size: 0.7rem;
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.completed-dot {
+  background: #40c057;
+}
+
+.incomplete-dot {
+  background: #adb5bd;
+}
+
+.calendar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e9ecef;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #868e96;
+}
+
+.legend-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-item .today-dot {
+  background: #667eea;
+  border: 2px solid #667eea;
+  width: 10px;
+  height: 10px;
+}
+
+.calendar-hint {
+  font-size: 0.8rem;
+  color: #868e96;
+  font-weight: normal;
+  margin-left: 8px;
+}
+
+/* 日期详情面板 */
+.date-detail-panel {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.date-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.date-detail-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.close-detail-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #e9ecef;
+  color: #495057;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.close-detail-btn:hover {
+  background: #dee2e6;
+  color: #333;
+}
+
+.date-detail-content {
+  text-align: center;
+}
+
+.completed-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  background: #d3f9d8;
   color: #2b8a3e;
+  border-radius: 20px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.incomplete-badge {
+  display: inline-block;
+  padding: 8px 20px;
+  background: #e9ecef;
+  color: #868e96;
+  border-radius: 20px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.incomplete-hint {
+  color: #adb5bd;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.completed-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.completed-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.item-icon {
+  font-size: 1.2rem;
+}
+
+.item-name {
+  flex: 1;
+  text-align: left;
+  color: #333;
+  font-weight: 500;
+}
+
+.item-points {
+  color: #f08c00;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
 
 /* 奖励 */
@@ -2397,16 +2680,16 @@ onMounted(async () => {
   .tasks-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .type-selector {
     grid-template-columns: 1fr;
   }
-  
+
   .filter-section {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .view-toggle {
     justify-content: center;
   }
