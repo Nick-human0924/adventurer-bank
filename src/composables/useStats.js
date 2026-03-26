@@ -97,38 +97,42 @@ export function useStats(childId) {
       
       if (err) throw err
       
-      // 如果没有规则关联，基于 note 关键词简单分类
+      // 如果没有规则关联，基于 note 关键词简单分类 - 与规则管理保持一致
       const categories = {}
       data.forEach(t => {
         const note = (t.note || '').toLowerCase()
         let category = '其他'
         
-        // 学习成长 - 教育学习类
-        if (note.includes('英语') || note.includes('英文') || note.includes('abc') || note.includes('reading')) category = '学习成长'
-        else if (note.includes('数学') || note.includes('math') || note.includes('算术') || note.includes('计算')) category = '学习成长'
-        else if (note.includes('语文') || note.includes('识字') || note.includes('拼音')) category = '学习成长'
-        else if (note.includes('作业') || note.includes('学习') || note.includes('阅读') || note.includes('看书')) category = '学习成长'
-        else if (note.includes('练习') || note.includes('练字') || (note.includes('画画') && note.includes('学习'))) category = '学习成长'
         // 运动健康
-        else if (note.includes('运动') || note.includes('体育') || note.includes('跑步') || note.includes('跳绳')) category = '运动健康'
-        else if (note.includes('锻炼') || note.includes('健身') || note.includes('户外')) category = '运动健康'
-        // 生活自理
-        else if (note.includes('整理') || note.includes('打扫') || note.includes('家务') || note.includes('房间')) category = '生活自理'
-        else if (note.includes('收拾') || note.includes('清洁') || note.includes('洗碗') || note.includes('叠被')) category = '生活自理'
-        else if (note.includes('穿衣') || note.includes('洗漱') || note.includes('洗澡')) category = '生活自理'
+        if (note.includes('运动') || note.includes('锻炼') || note.includes('球') || note.includes('跑步')) category = '运动健康'
+        else if (note.includes('游泳') || note.includes('骑车') || note.includes('跳绳') || note.includes('体操')) category = '运动健康'
+        else if (note.includes('体育') || note.includes('健身') || note.includes('户外') || note.includes('瑜伽')) category = '运动健康'
+        // 学习成长
+        else if (note.includes('作业') || note.includes('阅读') || note.includes('学习') || note.includes('写字')) category = '学习成长'
+        else if (note.includes('数学') || note.includes('英语') || note.includes('画画') || note.includes('科学')) category = '学习成长'
+        else if (note.includes('英文') || note.includes('abc') || note.includes('reading') || note.includes('拼音')) category = '学习成长'
+        else if (note.includes('语文') || note.includes('识字') || note.includes('看书') || note.includes('练习')) category = '学习成长'
+        else if (note.includes('算术') || note.includes('计算') || note.includes('math') || note.includes('地理')) category = '学习成长'
+        // 生活自理 - 包含"自己"关键词
+        else if (note.includes('整理') || note.includes('家务') || note.includes('起床') || note.includes('睡觉')) category = '生活自理'
+        else if (note.includes('刷牙') || note.includes('洗澡') || note.includes('穿衣') || note.includes('书包')) category = '生活自理'
+        else if (note.includes('打扫') || note.includes('房间') || note.includes('叠被') || note.includes('洗漱')) category = '生活自理'
+        else if (note.includes('收拾') || note.includes('清洁') || note.includes('洗碗') || note.includes('自己')) category = '生活自理'
         // 艺术创造
-        else if (note.includes('画') || note.includes('音乐') || note.includes('艺术') || note.includes('钢琴')) category = '艺术创造'
-        else if (note.includes('舞蹈') || note.includes('唱歌') || note.includes('手工') || note.includes('创作')) category = '艺术创造'
+        else if (note.includes('钢琴') || note.includes('吉他') || note.includes('唱歌') || note.includes('跳舞')) category = '艺术创造'
+        else if (note.includes('音乐') || note.includes('拍照') || note.includes('表演') || note.includes('手工')) category = '艺术创造'
+        else if (note.includes('画') || note.includes('艺术') || note.includes('创作') || note.includes('摄影')) category = '艺术创造'
         // 品德社交
-        else if (note.includes('帮助') || note.includes('分享') || note.includes('礼貌') || note.includes('问好')) category = '品德社交'
+        else if (note.includes('帮助') || note.includes('分享') || note.includes('礼貌') || note.includes('感谢')) category = '品德社交'
+        else if (note.includes('问好') || note.includes('友善') || note.includes('助人') || note.includes('合作')) category = '品德社交'
         else if (note.includes('夸奖') || note.includes('表扬') || note.includes('赞美') || note.includes('鼓励')) category = '品德社交'
         else if (note.includes('好人') || note.includes('善事') || note.includes('孝敬') || note.includes('尊重')) category = '品德社交'
         // 作息规律
-        else if (note.includes('早起') || note.includes('起床') || note.includes('睡觉') || note.includes('早睡')) category = '作息规律'
-        else if (note.includes('作息') || note.includes('按时') || note.includes('准时')) category = '作息规律'
+        else if (note.includes('按时') || note.includes('早睡') || note.includes('午睡') || note.includes('作息')) category = '作息规律'
+        else if (note.includes('早起') || note.includes('准时') || note.includes('闹钟')) category = '作息规律'
         // 健康饮食
-        else if (note.includes('吃') || note.includes('蔬菜') || note.includes('水果') || note.includes('吃饭')) category = '健康饮食'
-        else if (note.includes('喝水') || note.includes('营养') || note.includes('不挑食')) category = '健康饮食'
+        else if (note.includes('水果') || note.includes('蔬菜') || note.includes('牛奶') || note.includes('喝水')) category = '健康饮食'
+        else if (note.includes('吃饭') || note.includes('健康') || note.includes('饮食') || note.includes('营养')) category = '健康饮食'
         
         categories[category] = (categories[category] || 0) + (t.points || 0)
       })
