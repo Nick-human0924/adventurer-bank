@@ -1,5 +1,5 @@
 // src/composables/useStats.js
-import { ref, computed } from 'vue'
+import { ref, computed, unref, watch } from 'vue'
 import { supabase } from '../utils/supabase.js'
 
 export function useStats(childId) {
@@ -8,9 +8,18 @@ export function useStats(childId) {
   const heatmapData = ref(null)
   const loading = ref(false)
   const error = ref(null)
+  
+  // 获取当前 childId 值（支持 ref 或普通值）
+  const currentChildId = computed(() => unref(childId))
 
   // 获取积分趋势
   async function fetchTrend(days = 30) {
+    const id = currentChildId.value
+    if (!id) {
+      console.warn('useStats: childId is empty')
+      return
+    }
+    
     loading.value = true
     try {
       const startDate = new Date()
@@ -23,7 +32,7 @@ export function useStats(childId) {
           amount,
           currency
         `)
-        .eq('child_id', childId)
+        .eq('child_id', id)
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: true })
       
@@ -60,6 +69,7 @@ export function useStats(childId) {
       trendData.value = { labels, coins: coinsData, gems: gemsData }
     } catch (err) {
       error.value = err.message
+      console.error('useStats fetchTrend error:', err)
     } finally {
       loading.value = false
     }
@@ -67,6 +77,12 @@ export function useStats(childId) {
 
   // 获取分类统计
   async function fetchCategories() {
+    const id = currentChildId.value
+    if (!id) {
+      console.warn('useStats: childId is empty')
+      return
+    }
+    
     loading.value = true
     try {
       const { data, error: err } = await supabase
@@ -75,7 +91,7 @@ export function useStats(childId) {
           amount,
           rules!inner(category)
         `)
-        .eq('child_id', childId)
+        .eq('child_id', id)
         .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       
       if (err) throw err
@@ -89,6 +105,7 @@ export function useStats(childId) {
       categoryData.value = categories
     } catch (err) {
       error.value = err.message
+      console.error('useStats fetchCategories error:', err)
     } finally {
       loading.value = false
     }
@@ -96,6 +113,12 @@ export function useStats(childId) {
 
   // 获取热力图数据
   async function fetchHeatmap(months = 3) {
+    const id = currentChildId.value
+    if (!id) {
+      console.warn('useStats: childId is empty')
+      return
+    }
+    
     loading.value = true
     try {
       const startDate = new Date()
@@ -104,7 +127,7 @@ export function useStats(childId) {
       const { data, error: err } = await supabase
         .from('transactions')
         .select('created_at, amount')
-        .eq('child_id', childId)
+        .eq('child_id', id)
         .gte('created_at', startDate.toISOString())
       
       if (err) throw err
@@ -118,6 +141,7 @@ export function useStats(childId) {
       heatmapData.value = dailyScores
     } catch (err) {
       error.value = err.message
+      console.error('useStats fetchHeatmap error:', err)
     } finally {
       loading.value = false
     }

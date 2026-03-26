@@ -296,8 +296,45 @@ const levels = [
   { level: 10, name: '神话传说', min: 3000, max: Infinity }
 ]
 
-// 徽章配置
-const allBadges = [
+// 徽章配置（默认，将从数据库加载）
+const allBadges = ref([])
+
+// 从数据库加载徽章
+async function loadBadges() {
+  try {
+    const { data, error } = await supabase
+      .from('badges')
+      .select('*')
+      .eq('is_active', true)
+      .order('tier', { ascending: true })
+    
+    if (error) {
+      console.warn('加载徽章失败，使用默认徽章:', error)
+      // 使用默认徽章
+      allBadges.value = defaultBadges
+      return
+    }
+    
+    if (data && data.length > 0) {
+      allBadges.value = data.map(badge => ({
+        id: badge.code || badge.id,
+        name: badge.name,
+        emoji: badge.icon,
+        description: badge.description,
+        requirement: badge.unlock_condition?.min || 0
+      }))
+      console.log('✅ 从数据库加载了', allBadges.value.length, '个徽章')
+    } else {
+      allBadges.value = defaultBadges
+    }
+  } catch (err) {
+    console.warn('加载徽章出错:', err)
+    allBadges.value = defaultBadges
+  }
+}
+
+// 默认徽章（数据库不可用时使用）
+const defaultBadges = [
   { id: 'first_step', name: '初出茅庐', emoji: '👣', description: '获得第一分金币', requirement: 1 },
   { id: 'collector', name: '金币收集者', emoji: '💰', description: '累计获得50分', requirement: 50 },
   { id: 'hundred', name: '百分达人', emoji: '💯', description: '累计获得100分', requirement: 100 },
@@ -376,7 +413,7 @@ function getTier(totalPoints) {
 
 // 获取孩子的徽章
 function getChildBadges(child) {
-  return allBadges.map(badge => ({
+  return allBadges.value.map(badge => ({
     ...badge,
     unlocked: child.total_points >= badge.requirement
   })).sort((a, b) => (b.unlocked ? 1 : 0) - (a.unlocked ? 1 : 0))
@@ -612,6 +649,7 @@ function closeModal() {
 
 onMounted(() => {
   loadChildren()
+  loadBadges()
 })
 </script>
 
