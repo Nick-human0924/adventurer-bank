@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
 // 版本号：每次部署必须更新
-const VERSION = 'v4.0.1'
+const VERSION = 'v4.0.2'
 
 export default defineConfig({
   plugins: [vue()],
