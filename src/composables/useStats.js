@@ -1,5 +1,5 @@
 // src/composables/useStats.js
-import { ref, computed, unref, watch } from 'vue'
+import { ref, computed, unref } from 'vue'
 import { supabase } from '../utils/supabase.js'
 
 export function useStats(childId) {
@@ -29,47 +29,42 @@ export function useStats(childId) {
         .from('transactions')
         .select(`
           created_at,
-          amount,
-          currency
+          points,
+          type
         `)
         .eq('child_id', id)
+        .eq('type', 'earn')
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: true })
       
       if (err) throw err
       
-      // 按日期汇总
+      // 按日期汇总（使用 points 字段）
       const dailyData = {}
       data.forEach(t => {
         const date = new Date(t.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
         if (!dailyData[date]) {
-          dailyData[date] = { coins: 0, gems: 0 }
+          dailyData[date] = 0
         }
-        if (t.currency === 'coins') {
-          dailyData[date].coins += t.amount
-        } else {
-          dailyData[date].gems += t.amount
-        }
+        dailyData[date] += t.points || 0
       })
       
       // 计算累计值
-      let runningCoins = 0, runningGems = 0
+      let runningTotal = 0
       const labels = []
-      const coinsData = []
-      const gemsData = []
+      const pointsData = []
       
-      Object.entries(dailyData).forEach(([date, values]) => {
-        runningCoins += values.coins
-        runningGems += values.gems
+      Object.entries(dailyData).forEach(([date, points]) => {
+        runningTotal += points
         labels.push(date)
-        coinsData.push(runningCoins)
-        gemsData.push(runningGems)
+        pointsData.push(runningTotal)
       })
       
-      trendData.value = { labels, coins: coinsData, gems: gemsData }
+      trendData.value = { labels, data: pointsData }
+      console.log('✅ fetchTrend: 加载了', data.length, '条记录')
     } catch (err) {
       error.value = err.message
-      console.error('useStats fetchTrend error:', err)
+      console.error('❌ useStats fetchTrend error:', err)
     } finally {
       loading.value = false
     }
@@ -85,27 +80,42 @@ export function useStats(childId) {
     
     loading.value = true
     try {
+      // 使用现有的 transactions 表数据，通过 note 或 rule_id 推断分类
       const { data, error: err } = await supabase
         .from('transactions')
         .select(`
-          amount,
-          rules!inner(category)
+          points,
+          note,
+          rule_id
         `)
         .eq('child_id', id)
+        .eq('type', 'earn')
         .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       
       if (err) throw err
       
+      // 如果没有规则关联，基于 note 关键词简单分类
       const categories = {}
       data.forEach(t => {
-        const cat = t.rules?.category || '其他'
-        categories[cat] = (categories[cat] || 0) + t.amount
+        const note = t.note || ''
+        let category = '其他'
+        
+        if (note.includes('作业') || note.includes('学习')) category = '学习成长'
+        else if (note.includes('运动') || note.includes('体育')) category = '运动健康'
+        else if (note.includes('整理') || note.includes('打扫') || note.includes('家务')) category = '生活自理'
+        else if (note.includes('画') || note.includes('音乐') || note.includes('艺术')) category = '艺术创造'
+        else if (note.includes('帮助') || note.includes('分享') || note.includes('礼貌')) category = '品德社交'
+        else if (note.includes('早起') || note.includes('睡觉') || note.includes('作息')) category = '作息规律'
+        else if (note.includes('吃') || note.includes('蔬菜') || note.includes('水果')) category = '健康饮食'
+        
+        categories[category] = (categories[category] || 0) + (t.points || 0)
       })
       
       categoryData.value = categories
+      console.log('✅ fetchCategories:', categories)
     } catch (err) {
       error.value = err.message
-      console.error('useStats fetchCategories error:', err)
+      console.error('❌ useStats fetchCategories error:', err)
     } finally {
       loading.value = false
     }
@@ -126,8 +136,9 @@ export function useStats(childId) {
       
       const { data, error: err } = await supabase
         .from('transactions')
-        .select('created_at, amount')
+        .select('created_at, points')
         .eq('child_id', id)
+        .eq('type', 'earn')
         .gte('created_at', startDate.toISOString())
       
       if (err) throw err
@@ -135,13 +146,14 @@ export function useStats(childId) {
       const dailyScores = {}
       data.forEach(t => {
         const date = new Date(t.created_at).toISOString().split('T')[0]
-        dailyScores[date] = (dailyScores[date] || 0) + t.amount
+        dailyScores[date] = (dailyScores[date] || 0) + (t.points || 0)
       })
       
       heatmapData.value = dailyScores
+      console.log('✅ fetchHeatmap: 加载了', Object.keys(dailyScores).length, '天的数据')
     } catch (err) {
       error.value = err.message
-      console.error('useStats fetchHeatmap error:', err)
+      console.error('❌ useStats fetchHeatmap error:', err)
     } finally {
       loading.value = false
     }

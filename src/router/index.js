@@ -7,7 +7,6 @@ import Tasks from '../views/Tasks.vue'
 import Config from '../views/Config.vue'
 import Auth from '../views/Auth.vue'
 import Mall from '../views/Mall.vue'
-import Badges from '../views/Badges.vue'
 
 const routes = [
   {
@@ -45,12 +44,6 @@ const routes = [
     name: 'Mall',
     component: Mall,
     meta: { title: '兑换商城', icon: '🎁', requiresAuth: true }
-  },
-  {
-    path: '/badges',
-    name: 'Badges',
-    component: Badges,
-    meta: { title: '徽章墙', icon: '🏆', requiresAuth: true }
   },
   {
     path: '/config',

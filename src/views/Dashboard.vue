@@ -130,19 +130,6 @@
       </div>
     </div>
     
-    <!-- 图表区域 -->
-    <div class="charts-grid">
-      <div class="card">
-        <div class="card-title">📈 金币趋势（近7天）</div>
-        <div ref="trendChart" class="chart"></div>
-      </div>
-      
-      <div class="card">
-        <div class="card-title">🥧 行为类型分布</div>
-        <div ref="pieChart" class="chart"></div>
-      </div>
-    </div>
-    
     <!-- 最近行为记录 -->
     <div class="card">
       <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
@@ -318,8 +305,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, reactive, computed } from 'vue'
-import * as echarts from 'echarts'
+import { ref, onMounted, onUnmounted, reactive, computed } from 'vue'
 import { supabase, subscribeToTable } from '../utils/supabase.js'
 
 // v4.0 新增图表组件
@@ -327,10 +313,6 @@ import TrendChart from '../components/charts/TrendChart.vue'
 import RadarChart from '../components/charts/RadarChart.vue'
 import HeatmapChart from '../components/charts/HeatmapChart.vue'
 
-const trendChart = ref(null)
-const pieChart = ref(null)
-let trendChartInstance = null
-let pieChartInstance = null
 const isRefreshing = ref(false)
 const isScalingScore = ref(false)
 const poppingScore = ref(null)
@@ -1007,216 +989,6 @@ async function addBehavior() {
   }
 }
 
-// 初始化趋势图
-async function initTrendChart() {
-  console.log('📊 Dashboard: 开始初始化趋势图...')
-  
-  // 等待 DOM 准备好
-  await nextTick()
-  
-  if (!trendChart.value) {
-    console.error('❌ Dashboard: trendChart DOM 元素未准备好')
-    return
-  }
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError) {
-    console.error('❌ Dashboard: 趋势图获取用户失败:', userError)
-    return
-  }
-  if (!user) {
-    console.error('❌ Dashboard: 趋势图用户未登录')
-    return
-  }
-  
-  console.log('📊 Dashboard: 趋势图开始查询数据...')
-  
-  // 获取最近7天的日期范围
-  const endDate = new Date()
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - 6)
-  
-  const startStr = startDate.toISOString().split('T')[0]
-  const endStr = endDate.toISOString().split('T')[0] + 'T23:59:59'
-  
-  // 一次性查询最近7天的所有交易（从所有孩子）
-  const { data: { user: currentUser } } = await supabase.auth.getUser()
-  const { data: userChildren } = await supabase
-    .from('children')
-    .select('id')
-    .eq('user_id', currentUser.id)
-  
-  const childIds = userChildren?.map(c => c.id) || []
-  
-  if (childIds.length === 0) {
-    console.log('⚠️ Dashboard: 没有孩子，趋势图显示空数据')
-    // 显示空图表
-    renderTrendChart([], [], [])
-    return
-  }
-  
-  // 一次性查询7天内所有交易
-  const { data: allTransactions, error: txError } = await supabase
-    .from('transactions')
-    .select('created_at, type, points')
-    .in('child_id', childIds)
-    .gte('created_at', startStr)
-    .lte('created_at', endStr)
-  
-  if (txError) {
-    console.error('❌ Dashboard: 趋势图查询交易失败:', txError)
-    return
-  }
-  
-  console.log('📊 Dashboard: 趋势图查询到', allTransactions?.length || 0, '条交易记录')
-  
-  // 按日期分组统计
-  const dates = []
-  const earned = []
-  const spent = []
-  
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    const dateStr = d.toISOString().split('T')[0]
-    dates.push(d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }))
-    
-    // 统计当天的获得和消费
-    const dayTransactions = allTransactions?.filter(tx => tx.created_at.startsWith(dateStr)) || []
-    const earnedPoints = dayTransactions
-      .filter(tx => tx.type === 'earn')
-      .reduce((sum, tx) => sum + tx.points, 0)
-    const spentPoints = dayTransactions
-      .filter(tx => tx.type === 'spend')
-      .reduce((sum, tx) => sum + tx.points, 0)
-    
-    earned.push(earnedPoints)
-    spent.push(spentPoints)
-  }
-  
-  console.log('📊 Dashboard: 趋势图数据处理完成')
-  renderTrendChart(dates, earned, spent)
-}
-
-// 渲染趋势图（分离渲染逻辑）
-function renderTrendChart(dates, earned, spent) {
-  if (!trendChart.value) {
-    console.error('❌ Dashboard: trendChart DOM 元素丢失')
-    return
-  }
-  
-  if (!trendChartInstance) {
-    try {
-      trendChartInstance = echarts.init(trendChart.value)
-      console.log('✅ Dashboard: 趋势图 ECharts 初始化成功')
-    } catch (e) {
-      console.error('❌ Dashboard: ECharts 初始化失败:', e)
-      return
-    }
-  }
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['获得金币', '消费金币'] },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, data: dates },
-    yAxis: { type: 'value' },
-    series: [
-      {
-        name: '获得金币',
-        type: 'line',
-        smooth: true,
-        data: earned,
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(17, 153, 142, 0.3)' },
-            { offset: 1, color: 'rgba(17, 153, 142, 0.05)' }
-          ])
-        },
-        itemStyle: { color: '#11998e' }
-      },
-      {
-        name: '消费金币',
-        type: 'line',
-        smooth: true,
-        data: spent,
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(255, 65, 108, 0.3)' },
-            { offset: 1, color: 'rgba(255, 65, 108, 0.05)' }
-          ])
-        },
-        itemStyle: { color: '#ff416c' }
-      }
-    ]
-  }
-  
-  trendChartInstance.setOption(option)
-  console.log('✅ Dashboard: 趋势图渲染完成')
-}
-
-// 初始化饼图
-function initPieChart() {
-  console.log('📊 Dashboard: 开始初始化饼图...')
-  
-  if (!pieChart.value) {
-    console.error('❌ Dashboard: pieChart DOM 元素未准备好')
-    return
-  }
-  
-  try {
-    pieChartInstance = echarts.init(pieChart.value)
-    console.log('✅ Dashboard: 饼图 ECharts 初始化成功')
-  } catch (e) {
-    console.error('❌ Dashboard: 饼图 ECharts 初始化失败:', e)
-    return
-  }
-  
-  // 从实际交易数据统计行为分布
-  const categoryStats = {}
-  recentTransactions.value.forEach(tx => {
-    const category = tx.rule_category || '其他'
-    categoryStats[category] = (categoryStats[category] || 0) + 1
-  })
-  
-  // 转换为饼图数据格式
-  const pieData = Object.entries(categoryStats).map(([name, value]) => ({
-    value,
-    name
-  }))
-  
-  // 如果没有数据，显示默认空数据
-  const data = pieData.length > 0 
-    ? pieData 
-    : [
-        { value: 1, name: '暂无数据', itemStyle: { color: '#e0e0e0' } }
-      ]
-  
-  const option = {
-    tooltip: { trigger: 'item' },
-    legend: { orient: 'vertical', right: '5%', top: 'center' },
-    series: [
-      {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: {
-          borderRadius: 10,
-          borderColor: '#fff',
-          borderWidth: 2
-        },
-        label: { show: false },
-        emphasis: {
-          label: { show: true, fontSize: 16, fontWeight: 'bold' }
-        },
-        data
-      }
-    ]
-  }
-  
-  pieChartInstance.setOption(option)
-}
-
 // 刷新数据
 async function refreshData() {
   isRefreshing.value = true
@@ -1238,13 +1010,6 @@ async function refreshData() {
     
     const endTime = performance.now()
     console.log(`✅ Dashboard: 数据刷新完成，耗时 ${(endTime - startTime).toFixed(0)}ms`)
-    
-    // 数据加载完成后再初始化图表
-    nextTick(() => {
-      console.log('📊 Dashboard: 数据已加载，开始初始化图表...')
-      initTrendChart()
-      initPieChart()
-    })
     
   } catch (error) {
     console.error('❌ 刷新数据失败:', error)
@@ -1300,8 +1065,6 @@ onUnmounted(() => {
       sub.unsubscribe()
     }
   })
-  trendChartInstance?.dispose()
-  pieChartInstance?.dispose()
 })
 </script>
 

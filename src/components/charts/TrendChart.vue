@@ -59,13 +59,13 @@ let chart = null
 const { trendData, fetchTrend } = useStats(props.childId)
 
 const currentCoins = computed(() => {
-  if (!trendData.value?.coins?.length) return 0
-  return trendData.value.coins[trendData.value.coins.length - 1]
+  if (!trendData.value?.data?.length) return 0
+  return trendData.value.data[trendData.value.data.length - 1]
 })
 
 const currentGems = computed(() => {
-  if (!trendData.value?.gems?.length) return 0
-  return trendData.value.gems[trendData.value.gems.length - 1]
+  // 暂时只显示金币趋势
+  return 0
 })
 
 function initChart() {
@@ -79,21 +79,11 @@ function initChart() {
       labels: trendData.value.labels,
       datasets: [
         {
-          label: '金币',
-          data: trendData.value.coins,
+          label: '累计金币',
+          data: trendData.value.data,
           borderColor: '#FFD700',
           backgroundColor: 'rgba(255, 215, 0, 0.1)',
           fill: true,
-          tension: 0.4,
-          pointRadius: 4,
-          pointHoverRadius: 6
-        },
-        {
-          label: '宝石',
-          data: trendData.value.gems,
-          borderColor: '#00CED1',
-          backgroundColor: 'transparent',
-          fill: false,
           tension: 0.4,
           pointRadius: 4,
           pointHoverRadius: 6
@@ -145,8 +135,7 @@ function updateChart() {
   if (!chart || !trendData.value) return
   
   chart.data.labels = trendData.value.labels
-  chart.data.datasets[0].data = trendData.value.coins
-  chart.data.datasets[1].data = trendData.value.gems
+  chart.data.datasets[0].data = trendData.value.data
   chart.update()
 }
 
