@@ -192,7 +192,7 @@
               <th>孩子</th>
               <th>行为</th>
               <th>金币</th>
-              <th>类型</th>
+              <th>分类</th>
               <th>备注</th>
               <th>操作</th>
             </tr>
@@ -213,8 +213,8 @@
                 {{ tx.type === 'earn' ? '+' : '-' }}{{ tx.points }}
               </td>
               <td>
-                <span :class="['badge', tx.type === 'earn' ? 'badge-success' : 'badge-danger']">
-                  {{ tx.type === 'earn' ? '获得' : '消费' }}
+                <span :class="['badge', 'badge-category']">
+                  {{ getCategoryFromNote(tx.note) }}
                 </span>
               </td>
               <td>{{ tx.note || '-' }}</td>
@@ -1029,6 +1029,21 @@ function formatDate(dateString) {
   })
 }
 
+// 从note判断分类
+function getCategoryFromNote(note) {
+  if (!note) return '其他'
+  
+  if (note.includes('作业') || note.includes('学习') || note.includes('阅读') || note.includes('abc')) return '学习成长'
+  if (note.includes('运动') || note.includes('体育')) return '运动健康'
+  if (note.includes('整理') || note.includes('打扫') || note.includes('家务') || note.includes('房间')) return '生活自理'
+  if (note.includes('画') || note.includes('音乐') || note.includes('艺术')) return '艺术创造'
+  if (note.includes('帮助') || note.includes('分享') || note.includes('礼貌')) return '品德社交'
+  if (note.includes('早起') || note.includes('睡觉') || note.includes('作息') || note.includes('按时')) return '作息规律'
+  if (note.includes('吃') || note.includes('蔬菜') || note.includes('水果')) return '健康饮食'
+  
+  return '其他'
+}
+
 onMounted(async () => {
   await refreshData()
   // 图表初始化已移到 refreshData 内部，数据加载完成后执行
@@ -1069,6 +1084,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 分类标签样式 */
+.badge-category {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
 /* v4.0 图表区域样式 */
 .charts-section {
   margin-bottom: 24px;
