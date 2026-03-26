@@ -127,7 +127,7 @@ function updateChart() {
 
 async function changeRange(days) {
   selectedRange.value = days
-  await fetchCategories()
+  await fetchCategories(days)
   updateChart()
 }
 
