@@ -35,11 +35,11 @@
           <label>👶 选择孩子：</label>
           <select v-model="selectedChildId" v-if="children.length > 1">
             <option v-for="child in children" :key="child.id" :value="child.id">
-              {{ child.name }} ({{ child.current_balance }}💰 {{ child.gem_balance || 0 }}💎)
+              {{ child.name }} ({{ getVisibleBalance(child.id) }}💰 {{ child.gem_balance || 0 }}💎)
             </option>
           </select>
           <span v-else-if="children.length === 1" class="single-child">
-            {{ children[0].name }} ({{ children[0].current_balance }}💰 {{ children[0].gem_balance || 0 }}💎)
+            {{ children[0].name }} ({{ getVisibleBalance(children[0].id) }}💰 {{ children[0].gem_balance || 0 }}💎)
           </span>
           <span v-else class="no-child">请先添加孩子</span>
         </div>
@@ -84,6 +84,15 @@
           </div>
         </div>
       </div>
+    </div>
+    
+    <!-- 新增：数据可视化图表区域 -->
+    <div class="charts-section" v-if="selectedChildId">
+      <div class="charts-grid">
+        <TrendChart :childId="selectedChildId" />
+        <RadarChart :childId="selectedChildId" />
+      </div>
+      <HeatmapChart :childId="selectedChildId" class="heatmap-full" />
     </div>
     
     <!-- 统计卡片 -->
@@ -313,6 +322,11 @@ import { ref, onMounted, onUnmounted, nextTick, reactive, computed } from 'vue'
 import * as echarts from 'echarts'
 import { supabase, subscribeToTable } from '../utils/supabase.js'
 
+// v4.0 新增图表组件
+import TrendChart from '../components/charts/TrendChart.vue'
+import RadarChart from '../components/charts/RadarChart.vue'
+import HeatmapChart from '../components/charts/HeatmapChart.vue'
+
 const trendChart = ref(null)
 const pieChart = ref(null)
 let trendChartInstance = null
@@ -526,6 +540,30 @@ const filteredTransactions = computed(() => {
     return true
   })
 })
+
+// 获取孩子可见余额（基于当前筛选的交易记录）
+function getVisibleBalance(childId) {
+  // 如果没有筛选特定孩子，显示该孩子的全部可见记录总和
+  const childTransactions = recentTransactions.value.filter(tx => {
+    // 必须是该孩子的记录
+    if (tx.child_id !== childId) return false
+    // 应用其他筛选条件
+    if (filterType.value && tx.type !== filterType.value) return false
+    const txDate = tx.created_at.split('T')[0]
+    if (filterDateFrom.value && txDate < filterDateFrom.value) return false
+    if (filterDateTo.value && txDate > filterDateTo.value) return false
+    return true
+  })
+  
+  const earned = childTransactions
+    .filter(tx => tx.type === 'earn')
+    .reduce((sum, tx) => sum + tx.points, 0)
+  const spent = childTransactions
+    .filter(tx => tx.type === 'spend')
+    .reduce((sum, tx) => sum + tx.points, 0)
+  
+  return earned - spent
+}
 
 // 按分类分组的规则
 const rulesByCategory = computed(() => {
@@ -1268,6 +1306,28 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* v4.0 图表区域样式 */
+.charts-section {
+  margin-bottom: 24px;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.heatmap-full {
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1024px) {
+  .charts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
