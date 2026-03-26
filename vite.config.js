@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { readFileSync } from 'fs'
 
-// 版本号：每次部署必须更新
-const VERSION = 'v4.0.3'
+// 从 package.json 自动读取版本号
+const pkg = JSON.parse(readFileSync('./package.json', 'utf8'))
+const VERSION = `v${pkg.version}`
 
 export default defineConfig({
   plugins: [vue()],
