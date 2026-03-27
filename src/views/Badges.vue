@@ -176,23 +176,39 @@ async function loadChildren() {
 async function loadBadges() {
   if (!selectedChildId.value) return
   
-  // 加载所有徽章定义
-  const { data: badges } = await supabase
-    .from('badges')
-    .select('*')
-    .eq('is_active', true)
-    .order('category')
-    .order('tier', { ascending: false })
-  
-  allBadges.value = badges || []
-  
-  // 加载已解锁徽章
-  const { data: unlocked } = await supabase
-    .from('child_badges')
-    .select('*')
-    .eq('child_id', selectedChildId.value)
-  
-  unlockedBadges.value = unlocked || []
+  try {
+    // 加载所有徽章定义
+    const { data: badges, error: badgesError } = await supabase
+      .from('badges')
+      .select('*')
+      .eq('is_active', true)
+      .order('category')
+      .order('tier', { ascending: false })
+    
+    if (badgesError) {
+      console.warn('徽章表不存在，使用空列表:', badgesError.message)
+      allBadges.value = []
+    } else {
+      allBadges.value = badges || []
+    }
+    
+    // 加载已解锁徽章
+    const { data: unlocked, error: unlockedError } = await supabase
+      .from('child_badges')
+      .select('*')
+      .eq('child_id', selectedChildId.value)
+    
+    if (unlockedError) {
+      console.warn('child_badges表不存在:', unlockedError.message)
+      unlockedBadges.value = []
+    } else {
+      unlockedBadges.value = unlocked || []
+    }
+  } catch (err) {
+    console.warn('加载徽章出错:', err)
+    allBadges.value = []
+    unlockedBadges.value = []
+  }
 }
 
 async function checkNewBadges() {
