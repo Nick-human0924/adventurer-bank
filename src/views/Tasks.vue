@@ -712,7 +712,10 @@ const taskForm = reactive({
   target_count: 5,
   target_streak: 7,
   linked_rule_ids: [],
-  cycle_start: new Date().toISOString().split('T')[0],
+  cycle_start: (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })(),
   cycle_end: '',
   reward_points: 20,
   reward_gems: 0,
@@ -785,7 +788,8 @@ const calendarDays = computed(() => {
 
   for (let i = 1; i <= daysInMonth; i++) {
     const date = new Date(currentYear, currentMonth, i)
-    const dateStr = date.toISOString().split('T')[0]
+    // 使用本地日期格式，避免时区问题
+    const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
     const isToday = i === today.getDate()
 
     // 检查当天是否完成 - 优先检查 completion_history
@@ -910,8 +914,9 @@ async function loadTasks() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
 
-    // 获取今天日期
-    const today = new Date().toISOString().split('T')[0]
+    // 获取今天日期（使用本地时区）
+    const todayDate = new Date()
+    const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
 
     // 获取任务列表（带 user_id 过滤）
     const { data: tasksData, error } = await supabase
@@ -1064,7 +1069,8 @@ function resetForm() {
   taskForm.target_count = 5
   taskForm.target_streak = 7
   taskForm.linked_rule_ids = []
-  taskForm.cycle_start = new Date().toISOString().split('T')[0]
+  const d = new Date()
+  taskForm.cycle_start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   taskForm.cycle_end = ''
   taskForm.reward_points = 20
   taskForm.description = ''
@@ -1423,7 +1429,8 @@ function getTodayCompletedCount(task) {
   // 回退到 combo_progress 检测
   if (!task.progress?.combo_progress) return 0
 
-  const today = new Date().toISOString().split('T')[0]
+  const todayDate = new Date()
+  const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
   let count = 0
 
   for (const key in task.progress.combo_progress) {
@@ -1442,7 +1449,8 @@ function isRuleCompletedToday(ruleId, task) {
   // 回退到 combo_progress 检测
   if (!task.progress?.combo_progress) return false
 
-  const today = new Date().toISOString().split('T')[0]
+  const todayDate = new Date()
+  const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
   return task.progress.combo_progress[ruleId]?.date === today
 }
 
