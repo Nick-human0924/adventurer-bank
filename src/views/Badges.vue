@@ -1,4 +1,3 @@
-// src/views/Badges.vue
 <template>
   <div class="badges-page">
     <div class="page-header">
@@ -11,7 +10,7 @@
       </div>
       
       <div class="child-selector" v-if="children.length > 1">
-        <select v-model="selectedChildId" @change="loadBadges">
+        <select v-model="selectedChildId" @change="onChildChange">
           <option v-for="child in children" :key="child.id" :value="child.id">
             {{ child.name }}
           </option>
@@ -89,6 +88,7 @@ const unlockedBadges = ref([])
 const currentFilter = ref('all')
 const showAnimation = ref(false)
 const animatedBadge = ref(null)
+const childStats = ref({}) // 孩子的统计信息
 
 const filterTabs = [
   { value: 'all', label: '全部' },
@@ -139,30 +139,51 @@ function isNew(badgeId) {
 }
 
 function getProgress(badge) {
-  // 简化的进度计算，实际需要根据条件计算
   const condition = badge.unlock_condition
   if (!condition) return 0
   
-  // 这里需要根据实际条件计算进度
-  // 例如：如果是total_points，需要查询当前积分
-  return 0
+  const stats = childStats.value
+  
+  switch (condition.type) {
+    case 'total_points':
+      return stats.totalPoints || 0
+    case 'streak_days':
+      return stats.streakDays || 0
+    case 'days_active':
+      return stats.daysActive || 0
+    case 'category_points':
+      return stats.categoryPoints?.[condition.category] || 0
+    case 'redeem_count':
+      return stats.redeemCount || 0
+    default:
+      return 0
+  }
 }
 
 function showBadgeDetail(badge) {
   if (isUnlocked(badge.id) && isNew(badge.id)) {
     animatedBadge.value = badge
     showAnimation.value = true
-    // 标记为已查看
     markAsSeen(badge.id)
   }
 }
 
 async function markAsSeen(badgeId) {
-  await supabase
-    .from('child_badges')
-    .update({ is_new: false })
-    .eq('child_id', selectedChildId.value)
-    .eq('badge_id', badgeId)
+  try {
+    await supabase
+      .from('child_badges')
+      .update({ is_new: false })
+      .eq('child_id', selectedChildId.value)
+      .eq('badge_id', badgeId)
+    
+    // 更新本地状态
+    const badge = unlockedBadges.value.find(b => b.badge_id === badgeId)
+    if (badge) {
+      badge.is_new = false
+    }
+  } catch (err) {
+    console.warn('标记已查看失败:', err)
+  }
 }
 
 async function loadChildren() {
@@ -173,10 +194,79 @@ async function loadChildren() {
   }
 }
 
+async function calculateChildStats(childId) {
+  // 查询孩子的所有交易记录
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('child_id', childId)
+    .order('created_at', { ascending: true })
+  
+  const stats = {
+    totalPoints: 0,
+    streakDays: 0,
+    daysActive: 0,
+    redeemCount: 0,
+    categoryPoints: {}
+  }
+  
+  if (!txs || txs.length === 0) {
+    return stats
+  }
+  
+  // 计算总积分
+  stats.totalPoints = txs
+    .filter(t => t.type === 'earn')
+    .reduce((sum, t) => sum + t.points, 0)
+  
+  // 计算活跃天数（有交易记录的天数）
+  const activeDates = new Set()
+  for (const tx of txs) {
+    const d = new Date(tx.created_at)
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    activeDates.add(dateStr)
+  }
+  stats.daysActive = activeDates.size
+  
+  // 计算连续天数
+  const sortedDates = Array.from(activeDates).sort()
+  let currentStreak = 0
+  let maxStreak = 0
+  let prevDate = null
+  
+  for (const dateStr of sortedDates) {
+    if (prevDate) {
+      const prev = new Date(prevDate)
+      const curr = new Date(dateStr)
+      const diffDays = (curr - prev) / (1000 * 60 * 60 * 24)
+      
+      if (diffDays === 1) {
+        currentStreak++
+      } else {
+        maxStreak = Math.max(maxStreak, currentStreak)
+        currentStreak = 1
+      }
+    } else {
+      currentStreak = 1
+    }
+    prevDate = dateStr
+  }
+  stats.streakDays = Math.max(maxStreak, currentStreak)
+  
+  // 计算兑换次数
+  stats.redeemCount = txs.filter(t => t.type === 'redeem').length
+  
+  return stats
+}
+
 async function loadBadges() {
   if (!selectedChildId.value) return
   
   try {
+    // 计算孩子统计信息
+    childStats.value = await calculateChildStats(selectedChildId.value)
+    console.log('📊 孩子统计:', childStats.value)
+    
     // 加载所有徽章定义
     const { data: badges, error: badgesError } = await supabase
       .from('badges')
@@ -203,7 +293,12 @@ async function loadBadges() {
       unlockedBadges.value = []
     } else {
       unlockedBadges.value = unlocked || []
+      console.log('🏆 已解锁徽章:', unlockedBadges.value.length, '个')
     }
+    
+    // 检查并解锁新徽章（客户端计算）
+    await checkAndUnlockBadges()
+    
   } catch (err) {
     console.warn('加载徽章出错:', err)
     allBadges.value = []
@@ -211,28 +306,80 @@ async function loadBadges() {
   }
 }
 
-async function checkNewBadges() {
-  // 调用API检查是否有新徽章解锁
-  const { data } = await supabase.functions.invoke('check-badges', {
-    body: { childId: selectedChildId.value }
-  })
+async function checkAndUnlockBadges() {
+  const stats = childStats.value
+  const newUnlocks = []
   
-  if (data?.newBadges?.length > 0) {
-    // 有新徽章，重新加载
-    await loadBadges()
+  for (const badge of allBadges.value) {
+    // 跳过已解锁的
+    if (isUnlocked(badge.id)) continue
+    
+    const condition = badge.unlock_condition
+    let shouldUnlock = false
+    
+    switch (condition.type) {
+      case 'total_points':
+        shouldUnlock = stats.totalPoints >= condition.min
+        break
+      case 'streak_days':
+        shouldUnlock = stats.streakDays >= condition.min
+        break
+      case 'days_active':
+        shouldUnlock = stats.daysActive >= condition.min
+        break
+      case 'redeem_count':
+        shouldUnlock = stats.redeemCount >= condition.min
+        break
+      case 'category_points':
+        const catPoints = stats.categoryPoints?.[condition.category] || 0
+        shouldUnlock = catPoints >= condition.min
+        break
+    }
+    
+    if (shouldUnlock) {
+      newUnlocks.push(badge)
+    }
+  }
+  
+  // 批量解锁新徽章
+  if (newUnlocks.length > 0) {
+    console.log('🎉 新解锁徽章:', newUnlocks.map(b => b.name))
+    
+    for (const badge of newUnlocks) {
+      try {
+        await supabase.from('child_badges').insert({
+          child_id: selectedChildId.value,
+          badge_id: badge.id,
+          is_new: true
+        })
+      } catch (err) {
+        console.warn(`解锁徽章 ${badge.name} 失败:`, err)
+      }
+    }
+    
+    // 重新加载已解锁徽章
+    const { data: unlocked } = await supabase
+      .from('child_badges')
+      .select('*')
+      .eq('child_id', selectedChildId.value)
+    
+    unlockedBadges.value = unlocked || []
+    
     // 显示第一个新徽章动画
-    const newBadge = allBadges.value.find(b => b.id === data.newBadges[0])
-    if (newBadge) {
-      animatedBadge.value = newBadge
+    if (newUnlocks.length > 0) {
+      animatedBadge.value = newUnlocks[0]
       showAnimation.value = true
     }
   }
 }
 
+async function onChildChange() {
+  await loadBadges()
+}
+
 onMounted(async () => {
   await loadChildren()
   await loadBadges()
-  await checkNewBadges()
 })
 </script>
 
@@ -248,23 +395,22 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .header-icon {
-  font-size: 48px;
+  font-size: 36px;
 }
 
 .header-text h2 {
   margin: 0;
   font-size: 24px;
+  color: #333;
 }
 
 .header-text p {
@@ -273,26 +419,38 @@ onMounted(async () => {
 }
 
 .child-selector select {
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-radius: 8px;
   border: 1px solid #ddd;
-  font-size: 15px;
+  font-size: 14px;
+  background: white;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .filter-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
 }
 
 .filter-tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 24px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid #ddd;
   background: white;
   cursor: pointer;
   font-size: 14px;
@@ -300,7 +458,7 @@ onMounted(async () => {
 }
 
 .filter-tab:hover {
-  border-color: #4CAF50;
+  background: #f5f5f5;
 }
 
 .filter-tab.active {
@@ -310,14 +468,12 @@ onMounted(async () => {
 }
 
 .tab-count {
-  background: rgba(255,255,255,0.3);
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-}
-
-.section {
-  margin-bottom: 32px;
+  background: #ff5722;
+  color: white;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
 }
 
 .section-header {
@@ -327,13 +483,8 @@ onMounted(async () => {
   margin-bottom: 16px;
 }
 
-.section-title {
-  font-size: 18px;
-  font-weight: 600;
-}
-
 .section-count {
-  color: #666;
+  color: #999;
   font-size: 14px;
 }
 
@@ -347,11 +498,7 @@ onMounted(async () => {
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
 }
 
-@media (max-width: 640px) {
-  .badges-page {
-    padding: 16px;
-  }
-  
+@media (max-width: 768px) {
   .badges-grid {
     grid-template-columns: repeat(3, 1fr);
   }
