@@ -479,12 +479,18 @@ const selectedBehaviors = ref([])  // 改为数组支持多选
 const behaviorNote = ref('')
 const addingBehavior = ref(false)
 
-// 日期时间选择状态（默认当前日期时间）
-const behaviorDate = ref(new Date().toISOString().split('T')[0])
+// 日期时间选择状态（默认当前日期时间 - 本地时区）
+const behaviorDate = ref((() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})())
 const behaviorTime = ref(new Date().toTimeString().slice(0, 5))
 
-// 日期选择器的max属性（今天）
-const today = computed(() => new Date().toISOString().split('T')[0])
+// 日期选择器的max属性（今天 - 本地时区）
+const today = computed(() => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+})
 
 // 筛选状态
 const filterChildId = ref('')
@@ -604,8 +610,9 @@ async function loadStats() {
     .eq('type', 'earn')
   stats.totalPointsEarned = earnedData?.reduce((sum, t) => sum + t.points, 0) || 0
 
-  // 今日交易
-  const today = new Date().toISOString().split('T')[0]
+  // 今日交易（使用本地时区）
+  const todayDate = new Date()
+  const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
   const { count: todayCount } = await supabase
     .from('transactions')
     .select('*', { count: 'exact', head: true })
@@ -928,8 +935,9 @@ async function addBehavior() {
       behaviorNames.push(behavior.name)
     }
     
-    // 2. 检查并更新关联的任务进度
-    const today = new Date().toISOString().split('T')[0]
+    // 2. 检查并更新关联的任务进度（使用本地时区）
+    const todayDate = new Date()
+    const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
     
     for (const task of linkedTasks.value) {
       const { data: progress } = await supabase
@@ -1042,7 +1050,8 @@ async function addBehavior() {
     showAddBehaviorModal.value = false
     selectedBehaviors.value = []
     behaviorNote.value = ''
-    behaviorDate.value = new Date().toISOString().split('T')[0]
+    const resetDate = new Date()
+    behaviorDate.value = `${resetDate.getFullYear()}-${String(resetDate.getMonth() + 1).padStart(2, '0')}-${String(resetDate.getDate()).padStart(2, '0')}`
     behaviorTime.value = new Date().toTimeString().slice(0, 5)
     
     await refreshData()

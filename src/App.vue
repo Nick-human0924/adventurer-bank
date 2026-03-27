@@ -107,8 +107,9 @@ const $route = useRoute()
 const $router = useRouter()
 const { proxy } = getCurrentInstance()
 
-// 应用版本号
-const appVersion = 'v4.0.3'
+// 应用版本号（从 package.json 自动同步）
+import pkg from '../package.json'
+const appVersion = `v${pkg.version}`
 
 // 过滤需要认证的路由
 const authRoutes = computed(() => {
