@@ -940,14 +940,38 @@ async function addBehavior() {
     const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
     
     for (const task of linkedTasks.value) {
-      const { data: progress } = await supabase
+      let { data: progress } = await supabase
         .from('task_progress')
         .select('*')
         .eq('task_id', task.id)
         .eq('child_id', selectedChildId.value)
         .single()
       
-      if (!progress || progress.status === 'completed') continue
+      // 如果没有进度记录，创建新记录
+      if (!progress) {
+        const { data: newProgress, error: createError } = await supabase
+          .from('task_progress')
+          .insert({
+            task_id: task.id,
+            child_id: selectedChildId.value,
+            user_id: user.id,
+            combo_progress: {},
+            completion_history: [],
+            current_count: 0,
+            streak_count: 0,
+            status: 'active'
+          })
+          .select()
+          .single()
+        
+        if (createError) {
+          console.error('创建任务进度失败:', createError)
+          continue
+        }
+        progress = newProgress
+      }
+      
+      if (progress.status === 'completed') continue
       
       // 组合任务：更新 combo_progress
       if (task.task_type === 'combo' && task.linked_rule_ids) {
