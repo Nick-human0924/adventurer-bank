@@ -105,7 +105,7 @@ const weeks = computed(() => {
   startDate.setDate(startDate.getDate() - (startDay === 0 ? 6 : startDay - 1))
   
   for (let d = new Date(startDate); d <= today; d.setDate(d.getDate() + 1)) {
-    const dateStr = d.toISOString().split('T')[0]
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     days.push({
       date: dateStr,
       score: heatmapData.value[dateStr] || 0

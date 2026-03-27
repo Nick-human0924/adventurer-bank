@@ -35,7 +35,12 @@ export const TaskStatus = {
  * @param {string} date - 日期 (YYYY-MM-DD)
  * @returns {Promise<Array>} - 受影响的任务列表
  */
-export async function checkTaskProgress(childId, ruleId, date = new Date().toISOString().split('T')[0]) {
+export async function checkTaskProgress(childId, ruleId, date) {
+  // 使用本地时区日期
+  if (!date) {
+    const d = new Date()
+    date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
   console.log(`🔍 检查任务进度: child=${childId}, rule=${ruleId}, date=${date}`)
   
   const results = []

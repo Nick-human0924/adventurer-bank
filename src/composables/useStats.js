@@ -171,7 +171,8 @@ export function useStats(childId) {
       
       const dailyScores = {}
       data.forEach(t => {
-        const date = new Date(t.created_at).toISOString().split('T')[0]
+        const d = new Date(t.created_at)
+        const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         dailyScores[date] = (dailyScores[date] || 0) + (t.points || 0)
       })
       

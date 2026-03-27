@@ -85,7 +85,7 @@
         </div>        
         <div class="info-item">
           <span class="label">版本</span>          
-          <span class="value">v4.0.3</span>
+          <span class="value">{{ appVersion }}</span>
         </div>        
         <div class="info-item">
           <span class="label">技术栈</span>          
@@ -103,6 +103,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { supabase } from '../utils/supabase.js'
+import pkg from '../../package.json'
+
+const appVersion = `v${pkg.version}`
 
 const supabaseUrl = 'https://agkemugaxrhrsnbyiluw.supabase.co'
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFna2VtdWdheHJocnNuYnlpbHV3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwNjEzNTIsImV4cCI6MjA4OTYzNzM1Mn0.eGg3eo7PLrgcjHfLeOW5vq7ElMQbGT2I4RPpxmPdLUo'
