@@ -701,6 +701,7 @@ const showDetailModal = ref(false)
 const editingTask = ref(null)
 const selectedTask = ref(null)
 const selectedDateDetail = ref(null)  // 选中的日期详情
+const taskCompletions = ref({})  // 存储任务每天的完成状态 {date: {ruleId: boolean}}
 const saving = ref(false)
 const checkingTask = ref(null)
 const claimingTask = ref(null)
@@ -783,8 +784,8 @@ const calendarDays = computed(() => {
 
   // 获取任务完成历史和组合任务进度
   const completionHistory = selectedTask.value.progress?.completion_history || []
-  const comboProgress = selectedTask.value.progress?.combo_progress || {}
   const linkedRules = selectedTask.value.linkedRules || []
+  const completions = taskCompletions.value
 
   for (let i = 1; i <= daysInMonth; i++) {
     const date = new Date(currentYear, currentMonth, i)
@@ -795,19 +796,11 @@ const calendarDays = computed(() => {
     // 检查当天是否完成 - 优先检查 completion_history
     let completed = completionHistory.some(h => h.date === dateStr)
     
-    // 对于组合任务，还需要检查 combo_progress
+    // 对于组合任务，还需要检查 taskCompletions（从transactions查询的数据）
     if (!completed && selectedTask.value.task_type === 'combo' && linkedRules.length > 0) {
-      // 检查当天是否有任何关联规则被完成
-      const hasCompletedRules = Object.values(comboProgress).some(
-        data => data.date === dateStr
-      )
-      // 如果完成了所有要求的规则，标记为完成
-      if (hasCompletedRules) {
-        const completedRulesCount = Object.values(comboProgress).filter(
-          data => data.date === dateStr
-        ).length
-        completed = completedRulesCount >= linkedRules.length
-      }
+      const dayCompletions = completions[dateStr] || {}
+      const completedRulesCount = linkedRules.filter(r => dayCompletions[r.id]).length
+      completed = completedRulesCount >= linkedRules.length
     }
 
     days.push({
@@ -1000,11 +993,36 @@ async function loadTasks() {
           }
         }
 
+        // 查询该任务所有日期的完成状态（用于日历显示）
+        const taskCompletionData = {}
+        if (task.linked_rule_ids?.length > 0 && task.child_ids?.length > 0) {
+          for (const childId of task.child_ids) {
+            const { data: txData } = await supabase
+              .from('transactions')
+              .select('rule_id, created_at')
+              .eq('user_id', user.id)
+              .eq('child_id', childId)
+              .eq('type', 'earn')
+              .in('rule_id', task.linked_rule_ids)
+
+            for (const tx of (txData || [])) {
+              const d = new Date(tx.created_at)
+              const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+              
+              if (!taskCompletionData[dateStr]) {
+                taskCompletionData[dateStr] = {}
+              }
+              taskCompletionData[dateStr][tx.rule_id] = true
+            }
+          }
+        }
+
         return {
           ...task,
           progress: progress || null,
           linkedRules,
-          todayCompletions
+          todayCompletions,
+          completionData: taskCompletionData
         }
       })
     )
@@ -1343,6 +1361,8 @@ async function deleteTask(task) {
 // 打开任务详情
 function openTaskDetail(task) {
   selectedTask.value = task
+  // 设置任务完成数据（用于日历显示）
+  taskCompletions.value = task.completionData || {}
   showDetailModal.value = true
 }
 
