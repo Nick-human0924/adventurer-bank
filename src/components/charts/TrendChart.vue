@@ -43,7 +43,8 @@ import Chart from 'chart.js/auto'
 import { useStats } from '../../composables/useStats.js'
 
 const props = defineProps({
-  childId: { type: String, required: true }
+  childId: { type: String, required: true },
+  currentBalance: { type: Number, default: 0 }
 })
 
 const ranges = [
@@ -59,8 +60,7 @@ let chart = null
 const { trendData, fetchTrend } = useStats(props.childId)
 
 const currentCoins = computed(() => {
-  if (!trendData.value?.data?.length) return 0
-  return trendData.value.data[trendData.value.data.length - 1]
+  return props.currentBalance || 0
 })
 
 const currentGems = computed(() => {

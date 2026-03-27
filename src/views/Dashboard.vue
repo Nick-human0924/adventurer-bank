@@ -89,7 +89,7 @@
     <!-- 新增：数据可视化图表区域 -->
     <div class="charts-section" v-if="selectedChildId">
       <div class="charts-grid">
-        <TrendChart :childId="selectedChildId" />
+        <TrendChart :childId="selectedChildId" :currentBalance="getVisibleBalance(selectedChildId)" />
         <RadarChart :childId="selectedChildId" />
       </div>
       <HeatmapChart :childId="selectedChildId" class="heatmap-full" />
@@ -525,26 +525,9 @@ const filteredTransactions = computed(() => {
 
 // 获取孩子可见余额（基于当前筛选的交易记录）
 function getVisibleBalance(childId) {
-  // 如果没有筛选特定孩子，显示该孩子的全部可见记录总和
-  const childTransactions = recentTransactions.value.filter(tx => {
-    // 必须是该孩子的记录
-    if (tx.child_id !== childId) return false
-    // 应用其他筛选条件
-    if (filterType.value && tx.type !== filterType.value) return false
-    const txDate = tx.created_at.split('T')[0]
-    if (filterDateFrom.value && txDate < filterDateFrom.value) return false
-    if (filterDateTo.value && txDate > filterDateTo.value) return false
-    return true
-  })
-  
-  const earned = childTransactions
-    .filter(tx => tx.type === 'earn')
-    .reduce((sum, tx) => sum + tx.points, 0)
-  const spent = childTransactions
-    .filter(tx => tx.type === 'spend')
-    .reduce((sum, tx) => sum + tx.points, 0)
-  
-  return earned - spent
+  // 直接使用数据库中的 current_balance，确保准确性
+  const child = children.value.find(c => c.id === childId)
+  return child?.current_balance || 0
 }
 
 // 按分类分组的规则
