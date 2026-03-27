@@ -564,7 +564,7 @@ const linkedTasks = computed(() => {
   if (selectedBehaviors.value.length === 0 || !selectedChildId.value) return []
   const behaviorIds = selectedBehaviors.value.map(b => b.id)
   return tasks.value.filter(t => 
-    t.linkedRules?.some(r => behaviorIds.includes(r.id))
+    t.linked_rule_ids?.some(id => behaviorIds.includes(id))
   )
 })
 
