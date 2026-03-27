@@ -131,7 +131,12 @@ const filteredBadges = computed(() => {
 })
 
 function isUnlocked(badgeId) {
-  return unlockedBadges.value.some(b => b.badge_id === badgeId)
+  const result = unlockedBadges.value.some(b => b.badge_id === badgeId)
+  // 调试日志
+  if (unlockedBadges.value.length > 0) {
+    console.log(`isUnlocked(${badgeId}):`, result, 'unlockedBadges:', unlockedBadges.value.map(b => b.badge_id))
+  }
+  return result
 }
 
 function isNew(badgeId) {
@@ -310,9 +315,19 @@ async function checkAndUnlockBadges() {
   const stats = childStats.value
   const newUnlocks = []
   
+  console.log('🔍 checkAndUnlockBadges 开始:', { 
+    totalPoints: stats.totalPoints, 
+    streakDays: stats.streakDays,
+    daysActive: stats.daysActive,
+    allBadgesCount: allBadges.value.length
+  })
+  
   for (const badge of allBadges.value) {
     // 跳过已解锁的
-    if (isUnlocked(badge.id)) continue
+    if (isUnlocked(badge.id)) {
+      console.log(`⏭️ ${badge.name} 已解锁，跳过`)
+      continue
+    }
     
     const condition = badge.unlock_condition
     let shouldUnlock = false
@@ -334,12 +349,18 @@ async function checkAndUnlockBadges() {
         const catPoints = stats.categoryPoints?.[condition.category] || 0
         shouldUnlock = catPoints >= condition.min
         break
+      default:
+        console.log(`⚠️ ${badge.name} 未知条件类型: ${condition.type}`)
     }
+    
+    console.log(`🎫 ${badge.name} | ${condition.type} | ${condition.min} | 当前: ${stats[condition.type === 'total_points' ? 'totalPoints' : condition.type === 'streak_days' ? 'streakDays' : condition.type === 'days_active' ? 'daysActive' : 'other']} | 解锁: ${shouldUnlock}`)
     
     if (shouldUnlock) {
       newUnlocks.push(badge)
     }
   }
+  
+  console.log('🎉 应解锁徽章:', newUnlocks.map(b => b.name))
   
   // 批量解锁新徽章
   if (newUnlocks.length > 0) {
