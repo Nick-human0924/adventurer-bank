@@ -256,12 +256,15 @@
                     v-for="rule in rules" 
                     :key="rule.id"
                     class="behavior-option"
-                    :class="{ active: selectedBehaviors.some(b => b.id === rule.id) }"
+                    :class="{ 
+                      active: selectedBehaviors.some(b => b.id === rule.id),
+                      'negative': rule.type === 'bad'
+                    }"
                     @click="toggleBehavior(rule)"
                   >
                     <span class="behavior-emoji">{{ rule.icon || rule.icon_emoji || '⭐' }}</span>
                     <span class="behavior-name">{{ rule.name }}</span>
-                    <span class="behavior-points">+{{ rule.points }}</span>
+                    <span class="behavior-points" :class="rule.type">{{ rule.type === 'bad' ? '-' : '+' }}{{ rule.points }}</span>
                     <span v-if="selectedBehaviors.some(b => b.id === rule.id)" class="check-mark">✓</span>
                   </button>
                 </div>
@@ -725,8 +728,8 @@ async function loadRules() {
   const { data, error } = await supabase
     .from('rules')
     .select('*')
-    .eq('type', 'good')
     .eq('is_active', true)
+    .order('type', { ascending: false })  // good 在前，bad 在后
     .order('name')
   
   if (error) {
@@ -886,7 +889,7 @@ async function quickAddPoints(action) {
     child_id: selectedChildId.value,
     points: action.points,
     type: 'earn',
-    note: action.name,
+    note: action.name + ' 小艺代填',
     rule_id: null
   })
 
@@ -920,18 +923,19 @@ async function addBehavior() {
     
     // 1. 批量创建交易记录
     for (const behavior of selectedBehaviors.value) {
+      const isBadBehavior = behavior.type === 'bad'
       const { error: txError } = await supabase.from('transactions').insert({
         child_id: selectedChildId.value,
         points: behavior.points,
-        type: 'earn',
-        note: behaviorNote.value || behavior.name,
+        type: isBadBehavior ? 'deduct' : 'earn',
+        note: (behaviorNote.value || behavior.name) + ' 小艺代填',
         rule_id: behavior.id,
         created_at: createdAt
       })
       
       if (txError) throw txError
       
-      totalPoints += behavior.points
+      totalPoints += isBadBehavior ? -behavior.points : behavior.points
       behaviorNames.push(behavior.name)
     }
     
@@ -1743,6 +1747,31 @@ onUnmounted(() => {
 .behavior-option.active .behavior-points {
   color: #ffd43b;
   font-weight: 600;
+}
+
+/* 扣分行为样式 */
+.behavior-option.negative {
+  background: linear-gradient(135deg, #fff5f5 0%, #ffe0e0 100%);
+  border-color: #ff6b6b;
+}
+
+.behavior-option.negative:hover {
+  background: linear-gradient(135deg, #ffe0e0 0%, #ffc9c9 100%);
+}
+
+.behavior-option.negative.active {
+  background: linear-gradient(135deg, #ff416c 0%, #ff6b6b 100%);
+  color: white;
+  border-color: #ff416c;
+}
+
+.behavior-points.bad {
+  color: #ff416c;
+  font-weight: 600;
+}
+
+.behavior-option.negative.active .behavior-points.bad {
+  color: #ffd43b;
 }
 
 .linked-tasks {

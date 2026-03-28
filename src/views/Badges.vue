@@ -311,6 +311,9 @@ async function loadBadges() {
   }
 }
 
+// 已解锁徽章缓存（防止重复显示动画）
+const unlockedBadgeIds = ref(new Set())
+
 async function checkAndUnlockBadges() {
   const stats = childStats.value
   const newUnlocks = []
@@ -319,12 +322,13 @@ async function checkAndUnlockBadges() {
     totalPoints: stats.totalPoints, 
     streakDays: stats.streakDays,
     daysActive: stats.daysActive,
-    allBadgesCount: allBadges.value.length
+    allBadgesCount: allBadges.value.length,
+    alreadyUnlockedInSession: Array.from(unlockedBadgeIds.value)
   })
   
   for (const badge of allBadges.value) {
-    // 跳过已解锁的
-    if (isUnlocked(badge.id)) {
+    // 跳过已解锁的（从数据库状态和本地缓存双重检查）
+    if (isUnlocked(badge.id) || unlockedBadgeIds.value.has(badge.id)) {
       console.log(`⏭️ ${badge.name} 已解锁，跳过`)
       continue
     }
@@ -373,6 +377,8 @@ async function checkAndUnlockBadges() {
           badge_id: badge.id,
           is_new: true
         })
+        // 添加到本地缓存，防止重复显示
+        unlockedBadgeIds.value.add(badge.id)
       } catch (err) {
         console.warn(`解锁徽章 ${badge.name} 失败:`, err)
       }
@@ -386,7 +392,7 @@ async function checkAndUnlockBadges() {
     
     unlockedBadges.value = unlocked || []
     
-    // 显示第一个新徽章动画
+    // 显示第一个新徽章动画（只显示新解锁的）
     if (newUnlocks.length > 0) {
       animatedBadge.value = newUnlocks[0]
       showAnimation.value = true

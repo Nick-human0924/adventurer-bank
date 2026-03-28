@@ -104,6 +104,26 @@
             帮 {{ selectedChild?.name }} 兑换
           </span>
         </button>
+        
+        <!-- 快捷兑换按钮组 -->
+        <div v-if="canExchange(prize) && prize.stock > 0" class="quick-exchange-btns">
+          <button 
+            v-for="n in [1, 3, 5]" 
+            :key="n"
+            class="btn quick-exchange-btn"
+            :class="{ 'disabled': prize.stock < n || !canExchangeMultiple(prize, n) }"
+            :disabled="prize.stock < n || !canExchangeMultiple(prize, n)"
+            @click="quickExchange(prize, n)"
+          >
+            {{ n }}个
+          </button>
+          <button 
+            class="btn quick-exchange-btn custom"
+            @click="openCustomQuantityModal(prize)"
+          >
+            自定义
+          </button>
+        </div>
 
         <!-- 管理按钮 -->
         <div class="prize-actions">
@@ -203,8 +223,12 @@
               <span class="value">{{ selectedPrize?.name }}</span>
             </div>
             <div class="confirm-item">
-              <span class="label">需要金币：</span>
-              <span class="value price">{{ selectedPrize?.price }} 金币</span>
+              <span class="label">兑换数量：</span>
+              <span class="value">{{ exchangeQuantity }} 个</span>
+            </div>
+            <div class="confirm-item">
+              <span class="label">需要{{ (selectedPrize?.price_type || 'coins') === 'gems' ? '宝石' : '金币' }}：</span>
+              <span class="value price">{{ (selectedPrize?.price || 0) * exchangeQuantity }} {{ (selectedPrize?.price_type || 'coins') === 'gems' ? '💎' : '💰' }}</span>
             </div>
             <div class="confirm-item">
               <span class="label">兑换给：</span>
@@ -212,7 +236,12 @@
             </div>
             <div class="confirm-item">
               <span class="label">兑换后余额：</span>
-              <span class="value">{{ selectedChild?.current_balance - selectedPrize?.price }} 金币</span>
+              <span class="value">
+                {{ (selectedPrize?.price_type || 'coins') === 'gems' 
+                  ? ((selectedChild?.gem_balance || 0) - (selectedPrize?.price || 0) * exchangeQuantity) 
+                  : (selectedChild?.current_balance - (selectedPrize?.price || 0) * exchangeQuantity) 
+                }} {{ (selectedPrize?.price_type || 'coins') === 'gems' ? '💎' : '💰' }}
+              </span>
             </div>
           </div>
 
@@ -230,7 +259,46 @@
           <button class="btn" @click="closeExchangeModal">取消</button>
           <button class="btn btn-primary" @click="confirmExchange" :disabled="exchanging">
             <span v-if="exchanging">兑换中...</span>
-            <span v-else>✨ 确认兑换</span>
+            <span v-else>✨ 确认兑换 {{ exchangeQuantity }} 个</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 自定义数量弹窗 -->
+    <div v-if="showCustomQuantityModal" class="modal-overlay" @click.self="closeCustomQuantityModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>🎁 选择兑换数量</h3>
+          <button class="close-btn" @click="closeCustomQuantityModal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>奖品：{{ customQuantityPrize?.name }}</label>
+            <div style="text-align: center; font-size: 3rem; margin: 10px 0;">
+              {{ customQuantityPrize?.image ? '' : (customQuantityPrize?.emoji || '🎁') }}
+              <img v-if="customQuantityPrize?.image" :src="customQuantityPrize.image" style="width: 80px; height: 80px; object-fit: cover; border-radius: 10px;" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>兑换数量（库存：{{ customQuantityPrize?.stock || 0 }} 件）</label>
+            <div class="quantity-selector">
+              <button class="btn quantity-btn" @click="customQuantity = Math.max(1, customQuantity - 1)" :disabled="customQuantity <= 1">-</button>
+              <input v-model.number="customQuantity" type="number" min="1" :max="customQuantityPrize?.stock || 1" class="quantity-input" />
+              <button class="btn quantity-btn" @click="customQuantity = Math.min(customQuantityPrize?.stock || 1, customQuantity + 1)" :disabled="customQuantity >= (customQuantityPrize?.stock || 1)">+</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>需要支付：{{ ((customQuantityPrize?.price || 0) * customQuantity) }} {{ (customQuantityPrize?.price_type || 'coins') === 'gems' ? '💎' : '💰' }}</label>
+            <div style="font-size: 0.9rem; color: #666; margin-top: 5px;">
+              当前余额：{{ (customQuantityPrize?.price_type || 'coins') === 'gems' ? (selectedChild?.gem_balance || 0) : (selectedChild?.current_balance || 0) }} {{ (customQuantityPrize?.price_type || 'coins') === 'gems' ? '💎' : '💰' }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="closeCustomQuantityModal">取消</button>
+          <button class="btn btn-primary" @click="confirmCustomQuantity" :disabled="!canExchangeMultiple(customQuantityPrize, customQuantity)">
+            确认兑换
           </button>
         </div>
       </div>
@@ -342,11 +410,15 @@ const showAddPrizeModal = ref(false)
 const showExchangeModal = ref(false)
 const showCelebration = ref(false)
 const showOrders = ref(false)
+const showCustomQuantityModal = ref(false)  // 自定义数量弹窗
 const editingPrize = ref(null)  // 当前编辑的奖品，null表示添加模式
 
 // 选中数据
 const selectedPrize = ref(null)
 const exchangeMessage = ref('')
+const exchangeQuantity = ref(1)  // 兑换数量
+const customQuantityPrize = ref(null)  // 自定义数量时的奖品
+const customQuantity = ref(1)  // 自定义数量值
 const celebrationData = ref(null)
 
 // 奖品表单
@@ -476,20 +548,34 @@ function getExchangeBtnClass(prize) {
   return 'primary'
 }
 
+// 判断是否可以兑换多个
+function canExchangeMultiple(prize, quantity) {
+  if (!selectedChild.value || !prize) return false
+  if (prize.stock < quantity) return false
+
+  const priceType = prize.price_type || 'coins'
+  const totalPrice = prize.price * quantity
+  if (priceType === 'gems') {
+    return (selectedChild.value.gem_balance || 0) >= totalPrice
+  }
+  return selectedChild.value.current_balance >= totalPrice
+}
+
 // 打开兑换弹窗
 async function openExchangeModal(prize) {
   if (!canExchange(prize)) return
 
-  // 刷新孩子数据，确保余额是最新的
-  await loadChildren()
-
-  // 再次检查是否可以兑换（刷新数据后）
+  // 直接使用本地缓存的孩子数据，避免刷新
+  // 如果需要刷新，使用防抖或节流
+  
+  // 再次检查是否可以兑换
   if (!canExchange(prize)) {
     alert('兑换条件已变化，请刷新页面后重试')
     return
   }
 
   selectedPrize.value = prize
+  exchangeQuantity.value = 1  // 默认1个
   exchangeMessage.value = ''
   showExchangeModal.value = true
 }
@@ -498,7 +584,43 @@ async function openExchangeModal(prize) {
 function closeExchangeModal() {
   showExchangeModal.value = false
   selectedPrize.value = null
+  exchangeQuantity.value = 1
   exchangeMessage.value = ''
+}
+
+// 快捷兑换
+function quickExchange(prize, quantity) {
+  if (!canExchangeMultiple(prize, quantity)) return
+  
+  selectedPrize.value = prize
+  exchangeQuantity.value = quantity
+  exchangeMessage.value = ''
+  showExchangeModal.value = true
+}
+
+// 打开自定义数量弹窗
+function openCustomQuantityModal(prize) {
+  customQuantityPrize.value = prize
+  customQuantity.value = 1
+  showCustomQuantityModal.value = true
+}
+
+// 关闭自定义数量弹窗
+function closeCustomQuantityModal() {
+  showCustomQuantityModal.value = false
+  customQuantityPrize.value = null
+  customQuantity.value = 1
+}
+
+// 确认自定义数量
+function confirmCustomQuantity() {
+  if (!canExchangeMultiple(customQuantityPrize.value, customQuantity.value)) return
+  
+  selectedPrize.value = customQuantityPrize.value
+  exchangeQuantity.value = customQuantity.value
+  exchangeMessage.value = ''
+  closeCustomQuantityModal()
+  showExchangeModal.value = true
 }
 
 // 确认兑换
@@ -513,13 +635,31 @@ async function confirmExchange() {
     const prize = selectedPrize.value
     const child = selectedChild.value
     const priceType = prize.price_type || 'coins'
+    const quantity = exchangeQuantity.value || 1
+    const totalPrice = prize.price * quantity
+
+    // 检查库存是否足够
+    if (prize.stock < quantity) {
+      throw new Error(`库存不足，当前剩余 ${prize.stock} 件`)
+    }
+
+    // 检查余额是否足够
+    if (priceType === 'gems') {
+      if ((child.gem_balance || 0) < totalPrice) {
+        throw new Error(`宝石不足，需要 ${totalPrice} 💎`)
+      }
+    } else {
+      if (child.current_balance < totalPrice) {
+        throw new Error(`金币不足，需要 ${totalPrice} 💰`)
+      }
+    }
 
     // 1. 扣除货币（金币或宝石）
     const updateData = {}
     if (priceType === 'gems') {
-      updateData.gem_balance = (child.gem_balance || 0) - prize.price
+      updateData.gem_balance = (child.gem_balance || 0) - totalPrice
     } else {
-      updateData.current_balance = child.current_balance - prize.price
+      updateData.current_balance = child.current_balance - totalPrice
     }
 
     const { error: childError } = await supabase
@@ -532,7 +672,7 @@ async function confirmExchange() {
     // 2. 减少库存
     const { error: prizeError } = await supabase
       .from('prizes')
-      .update({ stock: prize.stock - 1 })
+      .update({ stock: prize.stock - quantity })
       .eq('id', prize.id)
 
     if (prizeError) throw prizeError
@@ -541,18 +681,18 @@ async function confirmExchange() {
     if (priceType === 'gems') {
       const { error: gemError } = await supabase.from('gem_transactions').insert({
         child_id: child.id,
-        gems: prize.price,
+        gems: totalPrice,
         type: 'spend',
-        note: `兑换奖品：${prize.name}`,
+        note: `兑换奖品：${prize.name} x${quantity} 小艺代填`,
         user_id: user.id
       })
       if (gemError) throw gemError
     } else {
       const { error: txError } = await supabase.from('transactions').insert({
         child_id: child.id,
-        points: prize.price,
+        points: totalPrice,
         type: 'spend',
-        note: `兑换奖品：${prize.name}`,
+        note: `兑换奖品：${prize.name} x${quantity} 小艺代填`,
         rule_id: null,
         user_id: user.id
       })
@@ -563,8 +703,9 @@ async function confirmExchange() {
     const { error: orderError } = await supabase.from('orders').insert({
       child_id: child.id,
       prize_id: prize.id,
-      price: prize.price,
+      price: totalPrice,
       price_type: priceType,
+      quantity: quantity,
       message: exchangeMessage.value,
       status: 'completed',
       user_id: user.id
@@ -575,7 +716,7 @@ async function confirmExchange() {
     // 5. 显示颁奖仪式
     celebrationData.value = {
       childName: child.name,
-      prizeName: prize.name,
+      prizeName: `${prize.name} x${quantity}`,
       message: exchangeMessage.value,
       currency: priceType === 'gems' ? '宝石' : '金币'
     }
@@ -1579,6 +1720,91 @@ function handleVisibilityChange() {
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* 快捷兑换按钮 */
+.quick-exchange-btns {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.quick-exchange-btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.quick-exchange-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.quick-exchange-btn.disabled {
+  background: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+}
+
+.quick-exchange-btn.custom {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+/* 数量选择器 */
+.quantity-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 15px 0;
+}
+
+.quantity-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.quantity-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.quantity-btn:disabled {
+  background: #e9ecef;
+  color: #adb5bd;
+  cursor: not-allowed;
+}
+
+.quantity-input {
+  width: 80px;
+  height: 40px;
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  outline: none;
+}
+
+.quantity-input:focus {
+  border-color: #667eea;
 }
 
 /* 打印样式 */
