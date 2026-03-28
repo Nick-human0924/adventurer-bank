@@ -131,16 +131,15 @@ const filteredBadges = computed(() => {
 })
 
 function isUnlocked(badgeId) {
-  const result = unlockedBadges.value.some(b => b.badge_id === badgeId)
-  // 调试日志
-  if (unlockedBadges.value.length > 0) {
-    console.log(`isUnlocked(${badgeId}):`, result, 'unlockedBadges:', unlockedBadges.value.map(b => b.badge_id))
-  }
+  // 确保类型一致（字符串比较）
+  const strBadgeId = String(badgeId)
+  const result = unlockedBadges.value.some(b => String(b.badge_id) === strBadgeId)
   return result
 }
 
 function isNew(badgeId) {
-  return unlockedBadges.value.some(b => b.badge_id === badgeId && b.is_new)
+  const strBadgeId = String(badgeId)
+  return unlockedBadges.value.some(b => String(b.badge_id) === strBadgeId && b.is_new)
 }
 
 function getProgress(badge) {
@@ -326,45 +325,63 @@ async function checkAndUnlockBadges() {
     alreadyUnlockedInSession: Array.from(unlockedBadgeIds.value)
   })
   
+  // 如果没有徽章定义，直接返回
+  if (!allBadges.value || allBadges.value.length === 0) {
+    console.log('⚠️ 没有徽章定义，跳过检查')
+    return
+  }
+  
   for (const badge of allBadges.value) {
     // 跳过已解锁的（从数据库状态和本地缓存双重检查）
-    if (isUnlocked(badge.id) || unlockedBadgeIds.value.has(badge.id)) {
+    const badgeIdStr = String(badge.id)
+    const alreadyUnlocked = unlockedBadges.value.some(b => String(b.badge_id) === badgeIdStr)
+    
+    if (alreadyUnlocked || unlockedBadgeIds.value.has(badgeIdStr)) {
       console.log(`⏭️ ${badge.name} 已解锁，跳过`)
       continue
     }
     
     const condition = badge.unlock_condition
+    if (!condition) {
+      console.log(`⚠️ ${badge.name} 没有解锁条件`)
+      continue
+    }
+    
     let shouldUnlock = false
+    let currentValue = 0
     
     switch (condition.type) {
       case 'total_points':
-        shouldUnlock = stats.totalPoints >= condition.min
+        currentValue = stats.totalPoints || 0
+        shouldUnlock = currentValue >= condition.min
         break
       case 'streak_days':
-        shouldUnlock = stats.streakDays >= condition.min
+        currentValue = stats.streakDays || 0
+        shouldUnlock = currentValue >= condition.min
         break
       case 'days_active':
-        shouldUnlock = stats.daysActive >= condition.min
+        currentValue = stats.daysActive || 0
+        shouldUnlock = currentValue >= condition.min
         break
       case 'redeem_count':
-        shouldUnlock = stats.redeemCount >= condition.min
+        currentValue = stats.redeemCount || 0
+        shouldUnlock = currentValue >= condition.min
         break
       case 'category_points':
-        const catPoints = stats.categoryPoints?.[condition.category] || 0
-        shouldUnlock = catPoints >= condition.min
+        currentValue = stats.categoryPoints?.[condition.category] || 0
+        shouldUnlock = currentValue >= condition.min
         break
       default:
         console.log(`⚠️ ${badge.name} 未知条件类型: ${condition.type}`)
     }
     
-    console.log(`🎫 ${badge.name} | ${condition.type} | ${condition.min} | 当前: ${stats[condition.type === 'total_points' ? 'totalPoints' : condition.type === 'streak_days' ? 'streakDays' : condition.type === 'days_active' ? 'daysActive' : 'other']} | 解锁: ${shouldUnlock}`)
+    console.log(`🎫 ${badge.name} | 条件:${condition.type} | 目标:${condition.min} | 当前:${currentValue} | 解锁:${shouldUnlock}`)
     
-    if (shouldUnlock) {
+    // 只有条件严格满足时才解锁
+    if (shouldUnlock === true && currentValue > 0) {
       newUnlocks.push(badge)
     }
   }
-  
-  console.log('🎉 应解锁徽章:', newUnlocks.map(b => b.name))
   
   // 批量解锁新徽章
   if (newUnlocks.length > 0) {
@@ -372,31 +389,40 @@ async function checkAndUnlockBadges() {
     
     for (const badge of newUnlocks) {
       try {
-        await supabase.from('child_badges').insert({
+        const { error } = await supabase.from('child_badges').insert({
           child_id: selectedChildId.value,
           badge_id: badge.id,
           is_new: true
         })
+        
+        if (error) {
+          console.warn(`解锁徽章 ${badge.name} 失败:`, error)
+          continue
+        }
+        
         // 添加到本地缓存，防止重复显示
-        unlockedBadgeIds.value.add(badge.id)
+        unlockedBadgeIds.value.add(String(badge.id))
+        
+        // 同时添加到本地数组，立即生效
+        unlockedBadges.value.push({
+          child_id: selectedChildId.value,
+          badge_id: badge.id,
+          is_new: true,
+          unlocked_at: new Date().toISOString()
+        })
+        
       } catch (err) {
         console.warn(`解锁徽章 ${badge.name} 失败:`, err)
       }
     }
     
-    // 重新加载已解锁徽章
-    const { data: unlocked } = await supabase
-      .from('child_badges')
-      .select('*')
-      .eq('child_id', selectedChildId.value)
-    
-    unlockedBadges.value = unlocked || []
-    
-    // 显示第一个新徽章动画（只显示新解锁的）
-    if (newUnlocks.length > 0) {
+    // 显示第一个新徽章动画（只显示真正新解锁的）
+    if (newUnlocks.length > 0 && !showAnimation.value) {
       animatedBadge.value = newUnlocks[0]
       showAnimation.value = true
     }
+  } else {
+    console.log('✅ 没有新徽章需要解锁')
   }
 }
 

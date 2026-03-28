@@ -927,7 +927,7 @@ async function addBehavior() {
       const { error: txError } = await supabase.from('transactions').insert({
         child_id: selectedChildId.value,
         points: behavior.points,
-        type: isBadBehavior ? 'deduct' : 'earn',
+        type: isBadBehavior ? 'spend' : 'earn',
         note: (behaviorNote.value || behavior.name) + ' 小艺代填',
         rule_id: behavior.id,
         created_at: createdAt
@@ -978,8 +978,8 @@ async function addBehavior() {
       if (progress.status === 'completed') continue
       
       // 组合任务：更新 combo_progress
-      if (task.task_type === 'combo' && task.linked_rule_ids) {
-        const currentComboProgress = progress.combo_progress || {}
+      if (task.task_type === 'combo' && task.linked_rule_ids && task.linked_rule_ids.length > 0) {
+        const currentComboProgress = { ...(progress.combo_progress || {}) }
         
         // 记录每个完成的规则
         for (const behavior of selectedBehaviors.value) {
@@ -993,28 +993,40 @@ async function addBehavior() {
         
         // 检查当天是否完成了所有要求的规则
         const completedRulesToday = Object.values(currentComboProgress).filter(
-          data => data.date === today
+          data => data.date === today && data.completed === true
         ).length
         
+        // 只有当完成了所有关联规则，才算完成一次
         const allRulesCompleted = completedRulesToday >= task.linked_rule_ids.length
+        
+        // 计算新的完成次数（只有完成所有规则才算一次）
+        const currentCount = progress.current_count || 0
+        const newCount = allRulesCompleted ? currentCount + 1 : currentCount
+        
+        // 检查是否达到目标次数
+        const targetCount = task.target_count || 7
+        const isCompleted = newCount >= targetCount
+        
+        console.log(`📝 组合任务 ${task.title}: 今日完成${completedRulesToday}/${task.linked_rule_ids.length}个规则, 总进度${newCount}/${targetCount}, 完成:${isCompleted}`)
         
         // 更新任务进度
         await supabase.from('task_progress').update({
           combo_progress: currentComboProgress,
-          current_count: allRulesCompleted ? (progress.current_count || 0) + 1 : (progress.current_count || 0),
-          status: allRulesCompleted && (progress.current_count || 0) + 1 >= (task.target_count || 7) ? 'completed' : 'active'
+          current_count: newCount,
+          status: isCompleted ? 'completed' : 'active'
         }).eq('id', progress.id)
         
         // 如果任务完成，更新任务状态
-        if (allRulesCompleted && (progress.current_count || 0) + 1 >= (task.target_count || 7)) {
+        if (isCompleted && progress.status !== 'completed') {
           await supabase.from('tasks').update({
             status: 'completed'
           }).eq('id', task.id)
+          console.log(`✅ 组合任务 ${task.title} 已完成！`)
         }
       }
       // 连续任务：更新 completion_history
       else if (task.task_type === 'continuous') {
-        const completionHistory = progress.completion_history || []
+        const completionHistory = [...(progress.completion_history || [])]
         
         // 检查今天是否已记录
         const alreadyRecorded = completionHistory.some(h => h.date === today)
@@ -1027,32 +1039,46 @@ async function addBehavior() {
           })
           
           const streakCount = completionHistory.length
+          const targetStreak = task.target_streak || 7
+          const isCompleted = streakCount >= targetStreak
+          
+          console.log(`📝 连续任务 ${task.title}: 连续${streakCount}/${targetStreak}天, 完成:${isCompleted}`)
           
           await supabase.from('task_progress').update({
             completion_history: completionHistory,
             streak_count: streakCount,
-            status: streakCount >= (task.target_streak || 7) ? 'completed' : 'active'
+            status: isCompleted ? 'completed' : 'active'
           }).eq('id', progress.id)
           
-          if (streakCount >= (task.target_streak || 7)) {
+          if (isCompleted && progress.status !== 'completed') {
             await supabase.from('tasks').update({
               status: 'completed'
             }).eq('id', task.id)
+            console.log(`✅ 连续任务 ${task.title} 已完成！`)
           }
+        } else {
+          console.log(`⏭️ 连续任务 ${task.title}: 今天已记录，跳过`)
         }
       }
       // 累计任务
       else if (task.task_type === 'cumulative') {
-        const newCount = (progress.current_count || 0) + 1
+        const currentCount = progress.current_count || 0
+        const newCount = currentCount + 1
+        const targetCount = task.target_count || 5
+        const isCompleted = newCount >= targetCount
+        
+        console.log(`📝 累计任务 ${task.title}: 进度${newCount}/${targetCount}, 完成:${isCompleted}`)
+        
         await supabase.from('task_progress').update({
           current_count: newCount,
-          status: newCount >= (task.target_count || 5) ? 'completed' : 'active'
+          status: isCompleted ? 'completed' : 'active'
         }).eq('id', progress.id)
         
-        if (newCount >= (task.target_count || 5)) {
+        if (isCompleted && progress.status !== 'completed') {
           await supabase.from('tasks').update({
             status: 'completed'
           }).eq('id', task.id)
+          console.log(`✅ 累计任务 ${task.title} 已完成！`)
         }
       }
       // 单次任务
