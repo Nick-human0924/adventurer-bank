@@ -699,13 +699,13 @@ async function confirmExchange() {
       if (txError) throw txError
     }
 
-    // 4. 创建订单
+    // 4. 创建订单（临时移除 quantity 列，等待数据库修复）
     const { error: orderError } = await supabase.from('orders').insert({
       child_id: child.id,
       prize_id: prize.id,
       price: totalPrice,
       price_type: priceType,
-      quantity: quantity,
+      // quantity: quantity,  // TODO: 数据库添加 quantity 列后恢复此行
       message: exchangeMessage.value,
       status: 'completed',
       user_id: user.id
