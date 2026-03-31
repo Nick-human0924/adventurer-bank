@@ -693,12 +693,20 @@ async function loadChildren() {
     }
   })
   
-  // 合并数据
+  // 合并数据 - 优先使用数据库的 current_balance，不一致时记录日志
   const childrenWithBalance = data.map(child => {
     const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
+    const calculatedBalance = tx.earned - tx.spent
+    const dbBalance = child.current_balance || 0
+
+    // 如果数据库余额与计算余额差异超过0.01，说明有未记录的变动（如兑换）
+    if (Math.abs(dbBalance - calculatedBalance) > 0.01) {
+      console.log(`⚠️ 余额不一致 ${child.name}: 数据库=${dbBalance}, 计算=${calculatedBalance}, 使用数据库值`)
+    }
+
     return {
       ...child,
-      current_balance: tx.earned - tx.spent
+      current_balance: dbBalance  // 优先使用数据库值
     }
   })
   
