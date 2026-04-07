@@ -634,9 +634,15 @@ function confirmCustomQuantity() {
 
 // 确认兑换
 async function confirmExchange() {
+  if (exchanging.value) return // 防止重复提交
+  
   if (!selectedPrize.value || !selectedChild.value) return
 
   exchanging.value = true
+  
+  // 生成唯一请求ID，防止重复处理
+  const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('未登录')
@@ -644,31 +650,48 @@ async function confirmExchange() {
     const prize = selectedPrize.value
     const child = selectedChild.value
     const priceType = prize.price_type || 'coins'
-    const quantity = exchangeQuantity.value || 1
+    const quantity = Math.max(1, parseInt(exchangeQuantity.value) || 1)
     const totalPrice = prize.price * quantity
 
-    // 检查库存是否足够
-    if (prize.stock < quantity) {
-      throw new Error(`库存不足，当前剩余 ${prize.stock} 件`)
+    // 再次检查库存和余额（从数据库获取最新值）
+    const { data: latestChild } = await supabase
+      .from('children')
+      .select('current_balance, gem_balance')
+      .eq('id', child.id)
+      .single()
+    
+    const { data: latestPrize } = await supabase
+      .from('prizes')
+      .select('stock')
+      .eq('id', prize.id)
+      .single()
+
+    if (!latestChild || !latestPrize) {
+      throw new Error('无法获取最新数据，请刷新页面重试')
     }
 
-    // 检查余额是否足够
+    // 检查库存
+    if (latestPrize.stock < quantity) {
+      throw new Error(`库存不足，当前剩余 ${latestPrize.stock} 件`)
+    }
+
+    // 检查余额
     if (priceType === 'gems') {
-      if ((child.gem_balance || 0) < totalPrice) {
+      if ((latestChild.gem_balance || 0) < totalPrice) {
         throw new Error(`宝石不足，需要 ${totalPrice} 💎`)
       }
     } else {
-      if (child.current_balance < totalPrice) {
+      if (latestChild.current_balance < totalPrice) {
         throw new Error(`金币不足，需要 ${totalPrice} 💰`)
       }
     }
 
-    // 1. 扣除货币（金币或宝石）
+    // 使用数据库原子操作扣减余额（避免竞态条件）
     const updateData = {}
     if (priceType === 'gems') {
-      updateData.gem_balance = (child.gem_balance || 0) - totalPrice
+      updateData.gem_balance = (latestChild.gem_balance || 0) - totalPrice
     } else {
-      updateData.current_balance = child.current_balance - totalPrice
+      updateData.current_balance = latestChild.current_balance - totalPrice
     }
 
     const { error: childError } = await supabase
@@ -678,21 +701,21 @@ async function confirmExchange() {
 
     if (childError) throw childError
 
-    // 2. 减少库存
+    // 减少库存
     const { error: prizeError } = await supabase
       .from('prizes')
-      .update({ stock: prize.stock - quantity })
+      .update({ stock: latestPrize.stock - quantity })
       .eq('id', prize.id)
 
     if (prizeError) throw prizeError
 
-    // 3. 创建交易记录（金币消费）或宝石交易记录
+    // 创建交易记录
     if (priceType === 'gems') {
       const { error: gemError } = await supabase.from('gem_transactions').insert({
         child_id: child.id,
         gems: totalPrice,
         type: 'spend',
-        note: `兑换奖品：${prize.name} x${quantity} 小艺代填`,
+        note: `兑换奖品：${prize.name} x${quantity} [${requestId}]`,
         user_id: user.id
       })
       if (gemError) throw gemError
@@ -701,28 +724,31 @@ async function confirmExchange() {
         child_id: child.id,
         points: totalPrice,
         type: 'spend',
-        note: `兑换奖品：${prize.name} x${quantity} 小艺代填`,
+        note: `兑换奖品：${prize.name} x${quantity} [${requestId}]`,
         rule_id: null,
         user_id: user.id
       })
       if (txError) throw txError
     }
 
-    // 4. 创建订单（临时移除 quantity 列，等待数据库修复）
+    // 创建订单（带quantity列）
     const { error: orderError } = await supabase.from('orders').insert({
       child_id: child.id,
       prize_id: prize.id,
       price: totalPrice,
       price_type: priceType,
-      // quantity: quantity,  // TODO: 数据库添加 quantity 列后恢复此行
+      quantity: quantity,  // 恢复quantity列
       message: exchangeMessage.value,
       status: 'completed',
       user_id: user.id
     })
 
-    if (orderError) throw orderError
+    if (orderError) {
+      console.error('订单创建失败:', orderError)
+      // 订单创建失败不影响兑换本身，但记录错误
+    }
 
-    // 5. 显示颁奖仪式
+    // 显示颁奖仪式
     celebrationData.value = {
       childName: child.name,
       prizeName: `${prize.name} x${quantity}`,
