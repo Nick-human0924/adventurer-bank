@@ -794,7 +794,7 @@ async function loadTransactions() {
     `)
     .in('child_id', childIds)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(200)
   
   if (txError) {
     console.error('❌ Dashboard: 加载交易记录失败:', txError)

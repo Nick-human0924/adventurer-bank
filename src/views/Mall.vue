@@ -512,8 +512,15 @@ async function loadPrizes() {
 // 加载订单列表
 async function loadOrders() {
   if (!selectedChildId.value) return
+  
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    console.error('❌ Mall: 加载订单时未登录')
+    orders.value = []
+    return
+  }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('orders')
     .select(`
       *,
@@ -521,7 +528,14 @@ async function loadOrders() {
       child:child_id(name)
     `)
     .eq('child_id', selectedChildId.value)
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
+  
+  if (error) {
+    console.error('❌ Mall: 加载订单失败:', error)
+    orders.value = []
+    return
+  }
 
   orders.value = (data || []).map(o => ({
     ...o,
@@ -529,6 +543,8 @@ async function loadOrders() {
     prize_image: o.prize?.image,
     child_name: o.child?.name
   }))
+  
+  console.log('📊 Mall: 加载到', orders.value.length, '条订单')
 }
 
 // 判断是否可以兑换
