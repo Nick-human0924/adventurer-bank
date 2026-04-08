@@ -181,7 +181,7 @@
         <table>
           <thead>
             <tr>
-              <th v-if="filteredTransactions.length > 0">
+              <th v-if="displayedTransactions.length > 0">
                 <input 
                   type="checkbox" 
                   :checked="isAllSelected"
@@ -198,7 +198,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="tx in filteredTransactions" :key="tx.id">
+            <tr v-for="tx in displayedTransactions" :key="tx.id">
               <td>
                 <input 
                   type="checkbox" 
@@ -224,11 +224,18 @@
                 </button>
               </td>
             </tr>
-            <tr v-if="filteredTransactions.length === 0">
+            <tr v-if="displayedTransactions.length === 0">
               <td colspan="8" class="no-data">没有找到匹配的记录</td>
             </tr>
           </tbody>
         </table>
+        
+        <!-- 加载更多按钮 -->
+        <div v-if="hasMoreTransactions" class="load-more-container">
+          <button class="btn btn-secondary" @click="loadMoreTransactions">
+            📥 加载更多 (已显示 {{ displayedTransactions.length }} / {{ filteredTransactions.length }} 条)
+          </button>
+        </div>
       </div>
     </div>
     
@@ -334,6 +341,7 @@ const recentTransactions = ref([])
 const tasks = ref([])
 const selectedChildId = ref('')
 const recordMessage = ref(null)
+const displayLimit = ref(20) // 默认显示20条，但查询获取更多数据供筛选
 
 // 选中的交易记录（用于批量删除）
 const selectedTransactions = ref([])
@@ -343,6 +351,21 @@ const isAllSelected = computed(() => {
   return filteredTransactions.value.length > 0 && 
          selectedTransactions.value.length === filteredTransactions.value.length
 })
+
+// 实际显示的交易记录（限制数量，但筛选基于全部数据）
+const displayedTransactions = computed(() => {
+  return filteredTransactions.value.slice(0, displayLimit.value)
+})
+
+// 是否有更多数据可显示
+const hasMoreTransactions = computed(() => {
+  return filteredTransactions.value.length > displayLimit.value
+})
+
+// 加载更多交易记录
+function loadMoreTransactions() {
+  displayLimit.value += 20
+}
 
 // 切换全选
 function toggleSelectAll() {
@@ -794,7 +817,7 @@ async function loadTransactions() {
     `)
     .in('child_id', childIds)
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(1000)  // 查询所有数据供筛选使用，但页面只显示20条
   
   if (txError) {
     console.error('❌ Dashboard: 加载交易记录失败:', txError)
@@ -1988,6 +2011,18 @@ onUnmounted(() => {
   outline: none;
 }
 
+/* 加载更多按钮样式 */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.load-more-container .btn {
+  min-width: 250px;
+}
+
 @media (max-width: 768px) {
   .filter-bar {
     flex-direction: column;
@@ -2006,6 +2041,10 @@ onUnmounted(() => {
   .form-row {
     flex-direction: column;
     gap: 12px;
+  }
+  
+  .load-more-container .btn {
+    width: 100%;
   }
 }
 </style>
