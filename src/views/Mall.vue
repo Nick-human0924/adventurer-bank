@@ -511,7 +511,12 @@ async function loadPrizes() {
 
 // 加载订单列表
 async function loadOrders() {
-  if (!selectedChildId.value) return
+  if (!selectedChildId.value) {
+    console.log('⚠️ Mall: 未选择孩子，跳过加载订单')
+    return
+  }
+  
+  console.log('🔄 Mall: 开始加载订单，选中孩子ID:', selectedChildId.value)
   
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -519,6 +524,8 @@ async function loadOrders() {
     orders.value = []
     return
   }
+  
+  console.log('👤 Mall: 当前用户ID:', user.id)
 
   const { data, error } = await supabase
     .from('orders')
@@ -536,6 +543,9 @@ async function loadOrders() {
     orders.value = []
     return
   }
+  
+  console.log('📊 Mall: 查询结果 - 原始数据条数:', data?.length || 0)
+  console.log('📊 Mall: 查询条件 - child_id:', selectedChildId.value, 'user_id:', user.id)
 
   orders.value = (data || []).map(o => ({
     ...o,
@@ -544,7 +554,7 @@ async function loadOrders() {
     child_name: o.child?.name
   }))
   
-  console.log('📊 Mall: 加载到', orders.value.length, '条订单')
+  console.log('✅ Mall: 加载到', orders.value.length, '条订单')
 }
 
 // 判断是否可以兑换
