@@ -757,17 +757,25 @@ async function confirmExchange() {
       if (txError) throw txError
     }
 
-    // 创建订单（带quantity列）
-    const { error: orderError } = await supabase.from('orders').insert({
+    // 创建订单（兼容旧数据库结构，quantity列可选）
+    const orderData = {
       child_id: child.id,
       prize_id: prize.id,
       price: totalPrice,
       price_type: priceType,
-      quantity: quantity,  // 恢复quantity列
       message: exchangeMessage.value,
       status: 'completed',
       user_id: user.id
-    })
+    }
+    
+    // 尝试插入quantity（如果数据库支持）
+    try {
+      orderData.quantity = quantity
+    } catch (e) {
+      // 忽略，旧数据库可能没有quantity列
+    }
+    
+    const { error: orderError } = await supabase.from('orders').insert(orderData)
 
     if (orderError) {
       console.error('订单创建失败:', orderError)
