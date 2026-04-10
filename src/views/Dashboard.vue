@@ -970,9 +970,8 @@ async function addBehavior() {
       behaviorNames.push(behavior.name)
     }
     
-    // 2. 检查并更新关联的任务进度（使用本地时区）
-    const todayDate = new Date()
-    const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
+    // 2. 检查并更新关联的任务进度（使用行为日期而非当前日期）
+    const today = behaviorDate.value
     
     for (const task of linkedTasks.value) {
       let { data: progress } = await supabase

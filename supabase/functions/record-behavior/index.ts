@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
     }
 
     // 5. 记录交易
-    const { error: insertError } = await supabase
+    const { data: txData, error: insertError } = await supabase
       .from('transactions')
       .insert({
         child_id: child.id,
@@ -118,6 +118,8 @@ Deno.serve(async (req) => {
         type: 'earn',
         note: message.substring(0, 100)
       })
+      .select('*')
+      .single()
 
     if (insertError) {
       return new Response(
@@ -127,6 +129,15 @@ Deno.serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // 5.5 更新任务进度
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      await updateTaskProgress(supabase, child.id, rule.id, today)
+    } catch (taskErr) {
+      console.error('更新任务进度失败:', taskErr)
+      // 不影响主流程，继续返回成功
     }
 
     // 6. 更新孩子积分
@@ -214,4 +225,130 @@ function extractKeywords(text: string) {
     .toLowerCase()
     .split(/\s+|，|。|！|？/)
     .filter(w => w.length >= 2 && !stopWords.includes(w))
+}
+
+// 更新任务进度
+async function updateTaskProgress(supabase: any, childId: string, ruleId: string, date: string) {
+  // 1. 查找关联此规则的所有活动任务
+  const { data: tasks, error: taskError } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      task_progress!inner(id, current_count, streak_count, last_completed_date, status, combo_progress)
+    `)
+    .eq('status', 'active')
+    .or(`task_type.eq.single,task_type.eq.continuous,task_type.eq.cumulative`)
+  
+  if (taskError) throw taskError
+  
+  // 2. 获取组合任务
+  const { data: comboTasks, error: comboError } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('status', 'active')
+    .eq('task_type', 'combo')
+    .filter('linked_rule_ids', 'cs', `{${ruleId}}`)
+  
+  if (comboError) throw comboError
+  
+  // 合并并过滤
+  const { data: ruleData } = await supabase.from('rules').select('name, icon, icon_emoji').eq('id', ruleId).single()
+  const ruleName = ruleData?.name || ''
+  const ruleIcon = ruleData?.icon || ruleData?.icon_emoji || '✓'
+  
+  const allTasks = [
+    ...(tasks || []).filter((t: any) => 
+      !t.linked_rule_ids || t.linked_rule_ids.length === 0 || t.linked_rule_ids.includes(ruleId)
+    ),
+    ...(comboTasks || [])
+  ]
+  
+  for (const task of allTasks) {
+    if (task.cycle_end && task.cycle_end < date) continue
+    
+    // 获取或创建进度记录
+    let { data: progress, error: progressError } = await supabase
+      .from('task_progress')
+      .select('*')
+      .eq('task_id', task.id)
+      .eq('child_id', childId)
+      .single()
+    
+    if (progressError || !progress) {
+      const { data: newProgress, error: createError } = await supabase
+        .from('task_progress')
+        .insert({
+          task_id: task.id,
+          child_id: childId,
+          user_id: task.user_id,
+          combo_progress: {},
+          completion_history: [],
+          current_count: 0,
+          streak_count: 0,
+          status: 'active'
+        })
+        .select()
+        .single()
+      
+      if (createError) {
+        console.error('创建进度失败:', createError)
+        continue
+      }
+      progress = newProgress
+    }
+    
+    if (progress.status === 'completed') continue
+    
+    let isCompleted = false
+    
+    if (task.task_type === 'combo' && task.linked_rule_ids?.length > 0) {
+      const comboProgress = { ...(progress.combo_progress || {}) }
+      comboProgress[ruleId] = { completed: true, date, time: new Date().toISOString() }
+      
+      const allCompleted = task.linked_rule_ids.every((id: string) => comboProgress[id]?.completed)
+      const newCount = (progress.current_count || 0) + 1
+      
+      await supabase.from('task_progress').update({
+        combo_progress: comboProgress,
+        current_count: newCount,
+        last_completed_date: date,
+        status: allCompleted ? 'completed' : 'active'
+      }).eq('id', progress.id)
+      
+      isCompleted = allCompleted
+    } else if (task.task_type === 'continuous') {
+      const history = [...(progress.completion_history || [])]
+      const alreadyRecorded = history.some((h: any) => h.date === date)
+      
+      if (!alreadyRecorded) {
+        history.push({ date, rule_name: ruleName, rule_icon: ruleIcon, points: task.reward_points || rule.points })
+        const streakCount = history.length
+        const targetStreak = task.target_streak || 7
+        
+        await supabase.from('task_progress').update({
+          completion_history: history,
+          streak_count: streakCount,
+          last_completed_date: date,
+          status: streakCount >= targetStreak ? 'completed' : 'active'
+        }).eq('id', progress.id)
+        
+        isCompleted = streakCount >= targetStreak
+      }
+    } else if (task.task_type === 'cumulative' || task.task_type === 'single') {
+      const newCount = (progress.current_count || 0) + 1
+      const targetCount = task.target_count || (task.task_type === 'single' ? 1 : 5)
+      
+      await supabase.from('task_progress').update({
+        current_count: newCount,
+        last_completed_date: date,
+        status: newCount >= targetCount ? 'completed' : 'active'
+      }).eq('id', progress.id)
+      
+      isCompleted = newCount >= targetCount
+    }
+    
+    if (isCompleted) {
+      await supabase.from('tasks').update({ status: 'completed' }).eq('id', task.id)
+    }
+  }
 }
