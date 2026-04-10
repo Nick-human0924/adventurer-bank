@@ -46,7 +46,7 @@ export async function checkTaskProgress(childId, ruleId, date) {
   const results = []
   
   try {
-    // 1. 获取关联此规则的所有活动任务
+    // 1. 获取关联此规则的所有活动任务（single/continuous/cumulative）
     const { data: tasks, error: taskError } = await supabase
       .from('tasks')
       .select(`
@@ -54,7 +54,7 @@ export async function checkTaskProgress(childId, ruleId, date) {
         task_progress!inner(id, current_count, streak_count, last_completed_date, status, combo_progress)
       `)
       .eq('status', 'active')
-      .or(`task_type.eq.continuous,task_type.eq.cumulative`)
+      .or(`task_type.eq.single,task_type.eq.continuous,task_type.eq.cumulative`)
     
     if (taskError) throw taskError
     
@@ -68,8 +68,13 @@ export async function checkTaskProgress(childId, ruleId, date) {
     
     if (comboError) throw comboError
     
-    // 合并任务列表
-    const allTasks = [...(tasks || []), ...(comboTasks || [])]
+    // 合并任务列表，并过滤 single/continuous/cumulative 任务的 linked_rule_ids
+    const allTasks = [
+      ...(tasks || []).filter(t => 
+        !t.linked_rule_ids || t.linked_rule_ids.length === 0 || t.linked_rule_ids.includes(ruleId)
+      ),
+      ...(comboTasks || [])
+    ]
     
     // 3. 处理每个任务
     for (const task of allTasks) {

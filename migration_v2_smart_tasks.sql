@@ -167,14 +167,19 @@ DECLARE
     v_days_diff INTEGER;
 BEGIN
     -- 查找关联此规则的所有活动任务
+    -- 修复：single/continuous/cumulative 任务也必须检查 linked_rule_ids
     FOR v_task IN 
         SELECT t.*, tp.id as progress_id, tp.current_count, tp.streak_count, 
                tp.last_completed_date, tp.status as progress_status, tp.combo_progress
         FROM tasks t
         LEFT JOIN task_progress tp ON t.id = tp.task_id AND tp.child_id = p_child_id
         WHERE t.status = 'active'
-          AND (t.task_type = 'continuous' OR t.task_type = 'cumulative' 
-               OR (t.task_type = 'combo' AND p_rule_id = ANY(t.linked_rule_ids)))
+          AND (
+              (t.task_type IN ('single', 'continuous', 'cumulative') 
+               AND (t.linked_rule_ids IS NULL OR array_length(t.linked_rule_ids, 1) IS NULL 
+                    OR p_rule_id = ANY(t.linked_rule_ids)))
+              OR (t.task_type = 'combo' AND p_rule_id = ANY(t.linked_rule_ids))
+          )
           AND (t.cycle_end IS NULL OR t.cycle_end >= p_check_date)
     LOOP
         -- 初始化或获取进度记录

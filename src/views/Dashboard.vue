@@ -1008,6 +1008,14 @@ async function addBehavior() {
       
       if (progress.status === 'completed') continue
       
+      // 计算当前任务实际关联的选中行为
+      const matchedBehaviors = selectedBehaviors.value.filter(b =>
+        task.linked_rule_ids?.includes(b.id)
+      )
+      if (matchedBehaviors.length === 0) continue
+      const firstMatched = matchedBehaviors[0]
+      const matchedPoints = matchedBehaviors.reduce((sum, b) => sum + (b.type === 'bad' ? -b.points : b.points), 0)
+      
       // 组合任务：更新 combo_progress
       if (task.task_type === 'combo' && task.linked_rule_ids && task.linked_rule_ids.length > 0) {
         const currentComboProgress = { ...(progress.combo_progress || {}) }
@@ -1065,8 +1073,9 @@ async function addBehavior() {
         if (!alreadyRecorded) {
           completionHistory.push({
             date: today,
-            rule_name: behaviorNames[0],
-            points: totalPoints
+            rule_name: firstMatched.name,
+            rule_icon: firstMatched.icon || firstMatched.icon_emoji || '✓',
+            points: matchedPoints
           })
           
           const streakCount = completionHistory.length
@@ -1094,11 +1103,12 @@ async function addBehavior() {
       // 累计任务
       else if (task.task_type === 'cumulative') {
         const currentCount = progress.current_count || 0
-        const newCount = currentCount + 1
+        const addCount = matchedBehaviors.length
+        const newCount = currentCount + addCount
         const targetCount = task.target_count || 5
         const isCompleted = newCount >= targetCount
         
-        console.log(`📝 累计任务 ${task.title}: 进度${newCount}/${targetCount}, 完成:${isCompleted}`)
+        console.log(`📝 累计任务 ${task.title}: 进度${newCount}/${targetCount}, 本次+${addCount}, 完成:${isCompleted}`)
         
         await supabase.from('task_progress').update({
           current_count: newCount,
