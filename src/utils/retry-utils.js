@@ -14,12 +14,17 @@ class RetryManager {
 
   // splitmix64伪随机数生成器 - 比Math.random()更适合分布式环境
   splitmix64(seed) {
-    let x = BigInt.asUintN(64, BigInt(seed) + BigInt(0x9E3779B97F4A7C15n))
-    let z = x
-    z = BigInt.asUintN(64, (z ^ (z >> BigInt(30))) * BigInt(0xBF58476D1CE4E5B9n))
-    z = BigInt.asUintN(64, (z ^ (z >> BigInt(27))) * BigInt(0x94D049BB133111EBn))
-    z = z ^ (z >> BigInt(31))
-    return Number(z) / Number(BigInt(2) ** BigInt(64))
+    try {
+      let x = BigInt.asUintN(64, BigInt(seed) + BigInt(0x9E3779B97F4A7C15n))
+      let z = x
+      z = BigInt.asUintN(64, (z ^ (z >> BigInt(30))) * BigInt(0xBF58476D1CE4E5B9n))
+      z = BigInt.asUintN(64, (z ^ (z >> BigInt(27))) * BigInt(0x94D049BB133111EBn))
+      z = z ^ (z >> BigInt(31))
+      return Number(z) / Number(BigInt(2) ** BigInt(64))
+    } catch (e) {
+      // BigInt不支持时回退到Math.random()
+      return Math.random()
+    }
   }
 
   // 计算第n次重试的延迟时间（位移实现，高性能）

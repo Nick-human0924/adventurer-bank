@@ -106,8 +106,13 @@ export async function initDatabase() {
       dbStatus.value.offlineMode = false
       console.log('✅ 数据库连接成功')
       
-      // 连接成功后，同步离线队列
-      await offlineQueue.syncPendingOperations()
+      // 连接成功后，尝试初始化离线队列并同步
+      try {
+        await initOfflineHandlers()
+        await offlineQueue.syncPendingOperations()
+      } catch (e) {
+        console.warn('⚠️ 离线队列同步失败:', e.message)
+      }
     } else {
       dbStatus.value.connected = false
       dbStatus.value.error = 'MISSING_TABLES'
@@ -178,15 +183,19 @@ export async function insertWithRetry(table, data, isCritical = true) {
     return result.data
   }
   
-  // 关键操作失败时，加入离线队列
+  // 关键操作失败时，尝试加入离线队列
   if (isCritical && !navigator.onLine) {
-    console.log('📴 网络断开，操作已加入离线队列')
-    await offlineQueue.enqueue({
-      type: `insert_${table}`,
-      payload: record
-    })
-    // 返回一个标记，表示已进入离线队列
-    return { offlineQueued: true, willSync: true }
+    try {
+      await initOfflineHandlers()
+      await offlineQueue.enqueue({
+        type: `insert_${table}`,
+        payload: record
+      })
+      console.log('📴 网络断开，操作已加入离线队列')
+      return { offlineQueued: true, willSync: true }
+    } catch (e) {
+      console.error('❌ 离线队列入队失败:', e.message)
+    }
   }
   
   throw result.error
@@ -267,15 +276,30 @@ supabase.auth.onAuthStateChange((event, session) => {
   console.log('🔐 认证状态变化:', event, session?.user?.email)
 })
 
-// 初始化离线队列处理器
-offlineQueue.registerHandler('insert_transactions', async (payload) => {
-  const { data, error } = await supabase.from('transactions').insert(payload).select()
-  if (error) throw error
-  return data
-})
+// 延迟初始化离线队列处理器（避免模块加载时IndexedDB失败）
+let handlersRegistered = false
+export async function initOfflineHandlers() {
+  if (handlersRegistered) return
+  
+  try {
+    await offlineQueue.init()
+    
+    offlineQueue.registerHandler('insert_transactions', async (payload) => {
+      const { data, error } = await supabase.from('transactions').insert(payload).select()
+      if (error) throw error
+      return data
+    })
 
-offlineQueue.registerHandler('insert_orders', async (payload) => {
-  const { data, error } = await supabase.from('orders').insert(payload).select()
-  if (error) throw error
-  return data
-})
+    offlineQueue.registerHandler('insert_orders', async (payload) => {
+      const { data, error } = await supabase.from('orders').insert(payload).select()
+      if (error) throw error
+      return data
+    })
+    
+    handlersRegistered = true
+    console.log('✅ 离线队列处理器已注册')
+  } catch (error) {
+    console.warn('⚠️ 离线队列初始化失败:', error.message)
+    // 不影响主流程，只是离线功能不可用
+  }
+}
