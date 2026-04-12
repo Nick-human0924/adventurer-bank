@@ -36,6 +36,7 @@ export function useStats(childId) {
         .eq('type', 'earn')
         .gte('created_at', startDate.toISOString())
         .order('created_at', { ascending: true })
+        .limit(500)
       
       if (err) throw err
       
@@ -94,6 +95,7 @@ export function useStats(childId) {
         .eq('child_id', id)
         .eq('type', 'earn')
         .gte('created_at', startDate.toISOString())
+        .limit(500)
       
       if (err) throw err
       
@@ -166,6 +168,7 @@ export function useStats(childId) {
         .eq('child_id', id)
         .eq('type', 'earn')
         .gte('created_at', startDate.toISOString())
+        .limit(1000)
       
       if (err) throw err
       

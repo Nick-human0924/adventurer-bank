@@ -86,8 +86,8 @@
       </div>
     </div>
     
-    <!-- 新增：数据可视化图表区域 -->
-    <div class="charts-section" v-if="selectedChildId">
+    <!-- 新增：数据可视化图表区域（延迟挂载，避免与 refreshData 抢占连接） -->
+    <div class="charts-section" v-if="chartsReady && selectedChildId">
       <div class="charts-grid">
         <TrendChart :childId="selectedChildId" :currentBalance="getVisibleBalance(selectedChildId)" />
         <RadarChart :childId="selectedChildId" />
@@ -327,6 +327,7 @@ const isRefreshing = ref(false)
 const isScalingScore = ref(false)
 const poppingScore = ref(null)
 const userName = ref('')
+const chartsReady = ref(false)
 
 const stats = reactive({
   totalChildren: 0,
@@ -1128,6 +1129,7 @@ async function refreshData() {
     console.error('❌ 刷新数据失败:', error)
   } finally {
     isRefreshing.value = false
+    chartsReady.value = true
   }
 }
 
