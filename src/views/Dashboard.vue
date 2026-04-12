@@ -629,12 +629,11 @@ async function loadStats() {
     .select('*', { count: 'exact', head: true })
   stats.totalChildren = childCount || 0
 
-  // 总金币发放
-  const { data: earnedData } = await supabase
-    .from('transactions')
-    .select('points')
-    .eq('type', 'earn')
-  stats.totalPointsEarned = earnedData?.reduce((sum, t) => sum + t.points, 0) || 0
+  // 总金币发放：直接从 children 表求和 total_points（避免拉取全量 transactions）
+  const { data: childrenTotals } = await supabase
+    .from('children')
+    .select('total_points')
+  stats.totalPointsEarned = childrenTotals?.reduce((sum, c) => sum + (c.total_points || 0), 0) || 0
 
   // 今日交易（使用本地时区）
   const todayDate = new Date()
@@ -811,33 +810,34 @@ async function loadTasks() {
     return
   }
   
-  // 获取任务分配的孩子（从 task_progress 表，带 user_id 过滤）
-  const tasksWithChildren = await Promise.all(
-    tasksData.map(async (task) => {
-      const { data: progress, error: progressError } = await supabase
-        .from('task_progress')
-        .select('child_id, children(name, avatar)')
-        .eq('task_id', task.id)
-        .eq('user_id', user.id)
-      
-      if (progressError) {
-        console.error(`❌ Dashboard: 加载任务${task.id}的进度失败:`, progressError)
-      }
-      
-      const childrenList = progress?.map(p => ({
-        id: p.child_id,
-        name: p.children?.name || '未知',
-        avatar: p.children?.avatar || '👶'
-      })) || []
-      
-      return {
-        ...task,
-        children: childrenList
-      }
-    })
-  )
+  // 一次性批量获取所有任务进度（替代 N+1 查询，显著提速）
+  const taskIds = tasksData.map(t => t.id)
+  const { data: allProgress, error: progressError } = await supabase
+    .from('task_progress')
+    .select('task_id, child_id, children(name, avatar)')
+    .in('task_id', taskIds)
+    .eq('user_id', user.id)
   
-  tasks.value = tasksWithChildren
+  if (progressError) {
+    console.error('❌ Dashboard: 加载任务进度失败:', progressError)
+  }
+  
+  // 按 task_id 分组
+  const progressByTask = {}
+  for (const p of (allProgress || [])) {
+    if (!progressByTask[p.task_id]) progressByTask[p.task_id] = []
+    progressByTask[p.task_id].push({
+      id: p.child_id,
+      name: p.children?.name || '未知',
+      avatar: p.children?.avatar || '👶'
+    })
+  }
+  
+  tasks.value = tasksData.map(task => ({
+    ...task,
+    children: progressByTask[task.id] || []
+  }))
+  
   console.log('✅ Dashboard: 加载到', tasks.value.length, '个任务')
 }
 
