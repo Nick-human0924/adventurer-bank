@@ -678,7 +678,7 @@
 
 <script setup>
 import { ref, onMounted, computed, reactive } from 'vue'
-import { supabase } from '../utils/supabase.js'
+import { supabase, getCachedUser } from '../utils/supabase.js'
 import {
   TaskTypes,
   TaskStatus,
@@ -904,7 +904,7 @@ function closeDateDetail() {
 async function loadTasks() {
   try {
     // 获取当前用户
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
 
     // 获取今天日期（使用本地时区）
@@ -1058,7 +1058,7 @@ async function createMockData() {
 
   const result = await createMockSuperWeekChallenge(
     children.value[0].id,
-    (await supabase.auth.getUser()).data.user?.id
+    (await getCachedUser())?.id
   )
 
   if (result.success) {
@@ -1160,7 +1160,7 @@ async function saveTask() {
       if (error) throw error
     } else {
       // 创建任务
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = await getCachedUser()
       if (!user) throw new Error('未登录')
 
       const { data: newTask, error } = await supabase
@@ -1243,7 +1243,7 @@ async function claimReward(task) {
 
   claimingTask.value = task.id
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
 
     const rewardPoints = task.reward_points || 0
@@ -1324,7 +1324,7 @@ async function deleteTask(task) {
   }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
 
     // 1. 删除任务进度记录

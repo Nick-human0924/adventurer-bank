@@ -18,6 +18,20 @@ export default defineConfig({
           const info = assetInfo.name.split('.')
           const ext = info[info.length - 1]
           return `assets/[name]-[hash]-${VERSION}[extname]`
+        },
+        manualChunks: (id) => {
+          if (id.includes('node_modules')) {
+            if (id.includes('vue') || id.includes('vue-router')) {
+              return 'vendor-framework'
+            }
+            if (id.includes('@supabase')) {
+              return 'vendor-supabase'
+            }
+            if (id.includes('chart.js')) {
+              return 'vendor-charts'
+            }
+            return 'vendor'
+          }
         }
       }
     }

@@ -222,7 +222,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { supabase } from '../utils/supabase.js'
+import { supabase, getCachedUser } from '../utils/supabase.js'
 import { CATEGORY_ICONS, suggestIcon, suggestCategory } from '../lib/categoryIcons.js'
 
 const rules = ref([])
@@ -313,7 +313,7 @@ const badRulesCount = computed(() => badRules.value.length)
 
 // 加载规则
 async function loadRules() {
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) return
   
   const { data } = await supabase
@@ -331,7 +331,7 @@ async function saveRule() {
     return
   }
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) {
     alert('请先登录')
     return

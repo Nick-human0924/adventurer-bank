@@ -391,8 +391,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { supabase } from '../utils/supabase.js'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { supabase, getCachedUser } from '../utils/supabase.js'
 
 // 数据
 const children = ref([])
@@ -401,6 +401,13 @@ const orders = ref([])
 const loading = ref(false)
 const selectedChildId = ref('')
 const exchanging = ref(false)
+
+// 监听选中孩子变化，自动加载订单
+watch(selectedChildId, (newId) => {
+  if (newId) {
+    loadOrders()
+  }
+})
 
 // 实时订阅
 let subscriptions = []
@@ -518,7 +525,7 @@ async function loadOrders() {
   
   console.log('🔄 Mall: 开始加载订单，选中孩子ID:', selectedChildId.value)
   
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) {
     console.error('❌ Mall: 加载订单时未登录')
     orders.value = []
@@ -670,7 +677,7 @@ async function confirmExchange() {
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
   
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
 
     const prize = selectedPrize.value
@@ -757,29 +764,23 @@ async function confirmExchange() {
       if (txError) throw txError
     }
 
-    // 创建订单（兼容旧数据库结构，quantity列可选）
+    // 创建订单
     const orderData = {
       child_id: child.id,
       prize_id: prize.id,
       price: totalPrice,
       price_type: priceType,
+      quantity: quantity,
       message: exchangeMessage.value,
       status: 'completed',
       user_id: user.id
     }
-    
-    // 尝试插入quantity（如果数据库支持）
-    try {
-      orderData.quantity = quantity
-    } catch (e) {
-      // 忽略，旧数据库可能没有quantity列
-    }
-    
+
     const { error: orderError } = await supabase.from('orders').insert(orderData)
 
     if (orderError) {
       console.error('订单创建失败:', orderError)
-      // 订单创建失败不影响兑换本身，但记录错误
+      throw new Error('订单记录失败，但金币已扣减，请联系管理员: ' + orderError.message)
     }
 
     // 显示颁奖仪式
@@ -900,7 +901,7 @@ function handleImageUpload(event) {
 // 保存奖品（添加或编辑）
 async function savePrize() {
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
 
     const prizeData = {
@@ -959,7 +960,7 @@ async function deletePrize(prize) {
   }
 
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
 
     const { error } = await supabase

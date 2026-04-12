@@ -25,27 +25,13 @@ export const dbStatus = ref({
   offlineMode: false
 })
 
-// 获取当前用户（带重试）
-export async function getCurrentUser() {
-  const result = await withRetry(
-    async () => {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      if (error) throw error
-      return user
-    },
-    {
-      ...criticalOperationConfig,
-      onRetry: ({ attempt, delay, error }) => {
-        console.log(`🔄 获取用户重试 ${attempt}/8，延迟 ${delay}ms`)
-      }
-    }
-  )
-  
-  if (result.success) {
-    currentUser.value = result.data
-    return result.data
-  }
-  throw result.error
+// 获取缓存用户（避免重复 getUser 网络请求）
+export async function getCachedUser() {
+  if (currentUser.value) return currentUser.value
+  const { data: { user }, error } = await supabase.auth.getUser()
+  if (error) throw error
+  currentUser.value = user
+  return user
 }
 
 // 检查表是否存在（带重试）
@@ -82,8 +68,8 @@ export async function initDatabase() {
   dbStatus.value.checking = true
 
   try {
-    // 获取当前用户（带重试）
-    await getCurrentUser()
+    // 获取当前用户（快速缓存）
+    await getCachedUser()
 
     // 并行检查各个表（提速3倍）
     const [childrenCheck, rulesCheck, transactionsCheck] = await Promise.all([

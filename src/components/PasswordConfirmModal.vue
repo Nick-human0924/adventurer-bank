@@ -38,7 +38,7 @@
 
 <script setup>
 import { ref, nextTick, watch } from 'vue'
-import { supabase } from '../utils/supabase.js'
+import { supabase, getCachedUser } from '../utils/supabase.js'
 
 const props = defineProps({
   visible: Boolean,
@@ -73,7 +73,7 @@ async function confirm() {
   
   try {
     // 获取当前用户邮箱
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user?.email) {
       error.value = '获取用户信息失败'
       return

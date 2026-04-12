@@ -316,7 +316,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, reactive, computed } from 'vue'
-import { supabase, subscribeToTable } from '../utils/supabase.js'
+import { supabase, subscribeToTable, getCachedUser } from '../utils/supabase.js'
 
 // v4.0 新增图表组件
 import TrendChart from '../components/charts/TrendChart.vue'
@@ -383,7 +383,7 @@ async function deleteTransaction(tx) {
   }
   
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
     
     // 1. 删除交易记录（只按ID删除，RLS策略会控制权限）
@@ -431,7 +431,7 @@ async function batchDeleteTransactions() {
   }
   
   try {
-    const { data: { user } } = await supabase.auth.getUser()
+    const user = await getCachedUser()
     if (!user) throw new Error('未登录')
     
     // 获取要删除的记录详情
@@ -657,12 +657,7 @@ async function loadStats() {
 async function loadChildren() {
   console.log('🔄 Dashboard: 开始加载孩子...')
   
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  
-  if (userError) {
-    console.error('❌ Dashboard: 获取用户失败:', userError)
-    return
-  }
+  const user = await getCachedUser()
   
   if (!user) {
     console.error('❌ Dashboard: 用户未登录')
@@ -684,56 +679,7 @@ async function loadChildren() {
   
   console.log('📊 Dashboard: 查询到', data?.length || 0, '个孩子')
   
-  // 如果没有孩子，直接返回
-  if (!data || data.length === 0) {
-    children.value = []
-    console.log('⚠️ Dashboard: 没有孩子数据')
-    return
-  }
-  
-  // 批量获取所有孩子的交易记录（一次性查询）
-  const childIds = data.map(c => c.id)
-  let transactionsMap = {}
-  
-  const { data: allTransactions, error: txError } = await supabase
-    .from('transactions')
-    .select('child_id, type, points')
-    .in('child_id', childIds)
-  
-  if (txError) {
-    console.error('❌ Dashboard: 加载交易记录失败:', txError)
-  }
-  
-  // 按孩子ID分组
-  allTransactions?.forEach(tx => {
-    if (!transactionsMap[tx.child_id]) {
-      transactionsMap[tx.child_id] = { earned: 0, spent: 0 }
-    }
-    if (tx.type === 'earn') {
-      transactionsMap[tx.child_id].earned += tx.points
-    } else {
-      transactionsMap[tx.child_id].spent += tx.points
-    }
-  })
-  
-  // 合并数据 - 优先使用数据库的 current_balance，不一致时记录日志
-  const childrenWithBalance = data.map(child => {
-    const tx = transactionsMap[child.id] || { earned: 0, spent: 0 }
-    const calculatedBalance = tx.earned - tx.spent
-    const dbBalance = child.current_balance || 0
-
-    // 如果数据库余额与计算余额差异超过0.01，说明有未记录的变动（如兑换）
-    if (Math.abs(dbBalance - calculatedBalance) > 0.01) {
-      console.log(`⚠️ 余额不一致 ${child.name}: 数据库=${dbBalance}, 计算=${calculatedBalance}, 使用数据库值`)
-    }
-
-    return {
-      ...child,
-      current_balance: dbBalance  // 优先使用数据库值
-    }
-  })
-  
-  children.value = childrenWithBalance
+  children.value = data || []
   console.log('✅ Dashboard: 加载到', children.value.length, '个孩子')
   children.value.forEach(c => {
     console.log(`  - ${c.name}: ${c.current_balance}金币, ${c.gem_balance || 0}宝石`)
@@ -777,11 +723,7 @@ async function loadRules() {
 async function loadTransactions() {
   console.log('🔄 Dashboard: 开始加载交易记录...')
   
-  const { data: { user }, error: userError } = await supabase.auth.getUser()
-  if (userError) {
-    console.error('❌ Dashboard: 获取用户失败:', userError)
-    return
-  }
+  const user = await getCachedUser()
   if (!user) {
     console.error('❌ Dashboard: 用户未登录')
     return
@@ -817,7 +759,7 @@ async function loadTransactions() {
     `)
     .in('child_id', childIds)
     .order('created_at', { ascending: false })
-    .limit(1000)  // 查询所有数据供筛选使用，但页面只显示20条
+    .limit(200)  // 限制200条，足够首页展示和图表分析
   
   if (txError) {
     console.error('❌ Dashboard: 加载交易记录失败:', txError)
@@ -840,7 +782,7 @@ async function loadTransactions() {
 
 // 加载任务
 async function loadTasks() {
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getCachedUser()
   if (!user) {
     console.error('❌ Dashboard: 加载任务时用户未登录')
     return
@@ -920,7 +862,7 @@ async function quickAddPoints(action) {
     child_id: selectedChildId.value,
     points: action.points,
     type: 'earn',
-    note: action.name + ' 小艺代填',
+    note: action.name,
     rule_id: null
   })
 
@@ -959,7 +901,7 @@ async function addBehavior() {
         child_id: selectedChildId.value,
         points: behavior.points,
         type: isBadBehavior ? 'spend' : 'earn',
-        note: (behaviorNote.value || behavior.name) + ' 小艺代填',
+        note: behaviorNote.value || behavior.name,
         rule_id: behavior.id,
         created_at: createdAt
       })
@@ -1166,9 +1108,11 @@ async function refreshData() {
   const startTime = performance.now()
   
   try {
-    // 先加载核心数据（阻塞渲染）
-    await loadChildren()
-    await loadRules()
+    // 核心数据并行加载
+    await Promise.all([
+      loadChildren(),
+      loadRules()
+    ])
     
     // 再并行加载次要数据
     await Promise.all([

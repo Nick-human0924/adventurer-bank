@@ -266,7 +266,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { supabase } from '../utils/supabase.js'
+import { supabase, getCachedUser } from '../utils/supabase.js'
 
 const children = ref([])
 const showAddModal = ref(false)
@@ -501,7 +501,7 @@ async function loadChildren() {
 async function saveChild() {
   if (!form.value.name) return
 
-  const user = await supabase.auth.getUser()
+  const user = await getCachedUser()
   const user_id = user.data.user?.id
 
   if (isEditing.value) {

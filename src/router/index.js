@@ -1,12 +1,14 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { supabase } from '../utils/supabase.js'
-import Dashboard from '../views/Dashboard.vue'
-import Children from '../views/Children.vue'
-import Rules from '../views/Rules.vue'
-import Tasks from '../views/Tasks.vue'
-import Config from '../views/Config.vue'
-import Auth from '../views/Auth.vue'
-import Mall from '../views/Mall.vue'
+
+// 路由懒加载，减少首屏 bundle 体积
+const Auth = () => import('../views/Auth.vue')
+const Dashboard = () => import('../views/Dashboard.vue')
+const Children = () => import('../views/Children.vue')
+const Rules = () => import('../views/Rules.vue')
+const Tasks = () => import('../views/Tasks.vue')
+const Config = () => import('../views/Config.vue')
+const Mall = () => import('../views/Mall.vue')
 
 const routes = [
   {

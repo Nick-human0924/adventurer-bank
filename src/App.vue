@@ -93,7 +93,7 @@
 <script setup>
 import { ref, onMounted, computed, getCurrentInstance } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { supabase, initDatabase } from './utils/supabase.js'
+import { supabase, initDatabase, currentUser } from './utils/supabase.js'
 import router from './router'
 
 const isConnected = ref(false)
@@ -153,6 +153,7 @@ async function checkAuth() {
   isAuthenticated.value = !!session
   if (session?.user) {
     userEmail.value = session.user.email
+    currentUser.value = session.user
   }
 }
 
@@ -183,18 +184,8 @@ onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
   
-  // 数据库连接检查
-  const timeoutId = setTimeout(() => {
-    if (!isConnected.value) {
-      connectionError.value = true
-      console.error('❌ 数据库连接超时')
-    }
-  }, 15000) // 增加到15秒超时
-  
-  try {
-    const result = await initDatabase()
-    clearTimeout(timeoutId)
-    
+  // 数据库连接检查 - 非阻塞后台运行
+  initDatabase().then(result => {
     if (result.success) {
       isConnected.value = true
       connectionError.value = false
@@ -202,11 +193,18 @@ onMounted(async () => {
       isConnected.value = false
       connectionError.value = true
     }
-  } catch (error) {
-    clearTimeout(timeoutId)
+  }).catch(error => {
     connectionError.value = true
     console.error('数据库初始化失败:', error)
-  }
+  })
+  
+  // 15秒超时检查（仅当仍未完成时显示错误）
+  setTimeout(() => {
+    if (!isConnected.value && !connectionError.value) {
+      connectionError.value = true
+      console.error('❌ 数据库连接超时')
+    }
+  }, 15000)
 })
 </script>
 
