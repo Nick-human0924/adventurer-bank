@@ -184,27 +184,20 @@ onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
   
-  // 数据库连接检查 - 非阻塞后台运行
+  // 数据库连接检查 - 非阻塞后台运行，不影响用户界面
   initDatabase().then(result => {
     if (result.success) {
       isConnected.value = true
       connectionError.value = false
     } else {
       isConnected.value = false
-      connectionError.value = true
+      // 不直接显示全局错误横幅，因为各页面会自己处理数据库错误
+      console.warn('⚠️ 数据库初始检查未通过:', result.error)
     }
   }).catch(error => {
-    connectionError.value = true
     console.error('数据库初始化失败:', error)
+    // 后台失败不阻断用户，让页面级请求自行报错
   })
-  
-  // 15秒超时检查（仅当仍未完成时显示错误）
-  setTimeout(() => {
-    if (!isConnected.value && !connectionError.value) {
-      connectionError.value = true
-      console.error('❌ 数据库连接超时')
-    }
-  }, 15000)
 })
 </script>
 
