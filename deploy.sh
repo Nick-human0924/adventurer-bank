@@ -38,7 +38,7 @@ sed -i "s/Time: [0-9]\{8\}/Time: $(date +%Y%m%d)/" index.html
 # 4. 提交并推送到 main 分支
 echo "📤 推送到 $DEPLOY_BRANCH 分支..."
 git remote set-url origin "$GIT_REMOTE" 2>/dev/null || git remote add origin "$GIT_REMOTE"
-git add dist/ index.html src/ vite.config.js package.json
+git add index.html src/ vite.config.js package.json
 git commit -m "Deploy v$VERSION - $(date '+%Y-%m-%d %H:%M')" || echo "无变更需要提交"
 git push origin "$DEPLOY_BRANCH" 2>&1
 
