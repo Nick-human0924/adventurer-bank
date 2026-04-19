@@ -10,6 +10,8 @@ export default defineConfig({
   plugins: [vue()],
   base: './',  // 使用相对路径
   build: {
+    sourcemap: false,
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         entryFileNames: `assets/[name]-[hash]-${VERSION}.js`,
@@ -20,18 +22,18 @@ export default defineConfig({
           return `assets/[name]-[hash]-${VERSION}[extname]`
         },
         manualChunks: (id) => {
-          if (id.includes('node_modules')) {
-            if (id.includes('vue') || id.includes('vue-router')) {
-              return 'vendor-framework'
-            }
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase'
-            }
-            if (id.includes('chart.js')) {
-              return 'vendor-charts'
-            }
-            return 'vendor'
+          if (!id.includes('node_modules')) return
+
+          if (id.includes('vue') || id.includes('vue-router')) {
+            return 'vendor-framework'
           }
+          if (id.includes('@supabase')) {
+            return 'vendor-supabase'
+          }
+          if (id.includes('chart.js') || id.includes('@kurkle')) {
+            return 'vendor-charts'
+          }
+          return 'vendor'
         }
       }
     }
