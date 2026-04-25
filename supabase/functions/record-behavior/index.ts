@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
         rule_id: rule.id,
         points: rule.points,
         type: 'earn',
-        note: message.substring(0, 100)
+        note: message.substring(0, 100) + ' 小艺代填'
       })
       .select('*')
       .single()

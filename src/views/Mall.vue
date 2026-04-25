@@ -104,11 +104,11 @@
             帮 {{ selectedChild?.name }} 兑换
           </span>
         </button>
-        
+
         <!-- 快捷兑换按钮组 -->
         <div v-if="canExchange(prize) && prize.stock > 0" class="quick-exchange-btns">
-          <button 
-            v-for="n in [1, 3, 5]" 
+          <button
+            v-for="n in [1, 3, 5]"
             :key="n"
             class="btn quick-exchange-btn"
             :class="{ 'disabled': prize.stock < n || !canExchangeMultiple(prize, n) }"
@@ -117,7 +117,7 @@
           >
             {{ n }}个
           </button>
-          <button 
+          <button
             class="btn quick-exchange-btn custom"
             @click="openCustomQuantityModal(prize)"
           >
@@ -237,9 +237,9 @@
             <div class="confirm-item">
               <span class="label">兑换后余额：</span>
               <span class="value">
-                {{ (selectedPrize?.price_type || 'coins') === 'gems' 
-                  ? ((selectedChild?.gem_balance || 0) - (selectedPrize?.price || 0) * exchangeQuantity) 
-                  : (selectedChild?.current_balance - (selectedPrize?.price || 0) * exchangeQuantity) 
+                {{ (selectedPrize?.price_type || 'coins') === 'gems'
+                  ? Math.max(0, (Number(selectedChild?.gem_balance) || 0) - Number(selectedPrize?.price || 0) * Math.max(1, parseInt(exchangeQuantity) || 1))
+                  : Math.max(0, (Number(selectedChild?.current_balance) || 0) - Number(selectedPrize?.price || 0) * Math.max(1, parseInt(exchangeQuantity) || 1))
                 }} {{ (selectedPrize?.price_type || 'coins') === 'gems' ? '💎' : '💰' }}
               </span>
             </div>
@@ -323,6 +323,9 @@
                 <p class="child-name">{{ celebrationData?.childName }}</p>
                 <p class="achievement">
                   成功兑换 <strong>{{ celebrationData?.prizeName }}</strong>
+                </p>
+                <p class="balance-info" v-if="celebrationData?.remainingBalance !== undefined">
+                  剩余{{ celebrationData?.currency }}：<strong>{{ celebrationData?.remainingBalance }}</strong>
                 </p>
                 <p class="message" v-if="celebrationData?.message">
                   "{{ celebrationData?.message }}"
@@ -522,16 +525,16 @@ async function loadOrders() {
     console.log('⚠️ Mall: 未选择孩子，跳过加载订单')
     return
   }
-  
+
   console.log('🔄 Mall: 开始加载订单，选中孩子ID:', selectedChildId.value)
-  
+
   const user = await getCachedUser()
   if (!user) {
     console.error('❌ Mall: 加载订单时未登录')
     orders.value = []
     return
   }
-  
+
   console.log('👤 Mall: 当前用户ID:', user.id)
 
   const { data, error } = await supabase
@@ -544,13 +547,13 @@ async function loadOrders() {
     .eq('child_id', selectedChildId.value)
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-  
+
   if (error) {
     console.error('❌ Mall: 加载订单失败:', error)
     orders.value = []
     return
   }
-  
+
   console.log('📊 Mall: 查询结果 - 原始数据条数:', data?.length || 0)
   console.log('📊 Mall: 查询条件 - child_id:', selectedChildId.value, 'user_id:', user.id)
 
@@ -560,7 +563,7 @@ async function loadOrders() {
     prize_image: o.prize?.image,
     child_name: o.child?.name
   }))
-  
+
   console.log('✅ Mall: 加载到', orders.value.length, '条订单')
 }
 
@@ -609,7 +612,7 @@ async function openExchangeModal(prize) {
 
   // 直接使用本地缓存的孩子数据，避免刷新
   // 如果需要刷新，使用防抖或节流
-  
+
   // 再次检查是否可以兑换
   if (!canExchange(prize)) {
     alert('兑换条件已变化，请刷新页面后重试')
@@ -633,7 +636,7 @@ function closeExchangeModal() {
 // 快捷兑换
 function quickExchange(prize, quantity) {
   if (!canExchangeMultiple(prize, quantity)) return
-  
+
   selectedPrize.value = prize
   exchangeQuantity.value = quantity
   exchangeMessage.value = ''
@@ -657,7 +660,7 @@ function closeCustomQuantityModal() {
 // 确认自定义数量
 function confirmCustomQuantity() {
   if (!canExchangeMultiple(customQuantityPrize.value, customQuantity.value)) return
-  
+
   selectedPrize.value = customQuantityPrize.value
   exchangeQuantity.value = customQuantity.value
   exchangeMessage.value = ''
@@ -668,14 +671,14 @@ function confirmCustomQuantity() {
 // 确认兑换
 async function confirmExchange() {
   if (exchanging.value) return // 防止重复提交
-  
+
   if (!selectedPrize.value || !selectedChild.value) return
 
   exchanging.value = true
-  
+
   // 生成唯一请求ID，防止重复处理
   const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-  
+
   try {
     const user = await getCachedUser()
     if (!user) throw new Error('未登录')
@@ -684,7 +687,10 @@ async function confirmExchange() {
     const child = selectedChild.value
     const priceType = prize.price_type || 'coins'
     const quantity = Math.max(1, parseInt(exchangeQuantity.value) || 1)
-    const totalPrice = prize.price * quantity
+    const totalPrice = (Number(prize.price) || 0) * quantity
+    
+    console.log(`[兑换] 原始数据: 孩子=${child.name}, 奖品=${prize.name}, 价格=${prize.price}, 数量=${quantity}, 总价=${totalPrice}, 类型=${priceType}`)
+    console.log(`[兑换] 孩子余额: 金币=${child.current_balance}, 宝石=${child.gem_balance || 0}`)
 
     // 再次检查库存和余额（从数据库获取最新值）
     const { data: latestChild } = await supabase
@@ -695,7 +701,7 @@ async function confirmExchange() {
     
     const { data: latestPrize } = await supabase
       .from('prizes')
-      .select('stock')
+      .select('stock, price, price_type, name')
       .eq('id', prize.id)
       .single()
 
@@ -703,29 +709,45 @@ async function confirmExchange() {
       throw new Error('无法获取最新数据，请刷新页面重试')
     }
 
+    // 强制转换为数字，防止字符串类型导致计算错误
+    const latestBalance = Number(latestChild.current_balance) || 0
+    const latestGemBalance = Number(latestChild.gem_balance) || 0
+    const latestStock = Number(latestPrize.stock) || 0
+    const latestPrice = Number(latestPrize.price) || 0
+    const latestPriceType = latestPrize.price_type || 'coins'
+    
+    console.log(`[兑换] 最新数据: 金币=${latestBalance}, 宝石=${latestGemBalance}, 库存=${latestStock}, 价格=${latestPrice}, 类型=${latestPriceType}`)
+    console.log(`[兑换] 准备兑换: 数量=${quantity}, 总价=${totalPrice}`)
+
     // 检查库存
-    if (latestPrize.stock < quantity) {
-      throw new Error(`库存不足，当前剩余 ${latestPrize.stock} 件`)
+    if (latestStock < quantity) {
+      throw new Error(`库存不足，当前剩余 ${latestStock} 件`)
     }
 
     // 检查余额
-    if (priceType === 'gems') {
-      if ((latestChild.gem_balance || 0) < totalPrice) {
+    if (latestPriceType === 'gems') {
+      if (latestGemBalance < totalPrice) {
         throw new Error(`宝石不足，需要 ${totalPrice} 💎`)
       }
     } else {
-      if (latestChild.current_balance < totalPrice) {
+      if (latestBalance < totalPrice) {
         throw new Error(`金币不足，需要 ${totalPrice} 💰`)
       }
     }
 
     // 使用数据库原子操作扣减余额（避免竞态条件）
-    const updateData = {}
-    if (priceType === 'gems') {
-      updateData.gem_balance = (latestChild.gem_balance || 0) - totalPrice
+    // 优先使用RPC原子操作，如果没有则回退到直接更新
+    let updateData = {}
+    let newBalance = 0
+    if (latestPriceType === 'gems') {
+      newBalance = latestGemBalance - totalPrice
+      updateData.gem_balance = newBalance
     } else {
-      updateData.current_balance = latestChild.current_balance - totalPrice
+      newBalance = latestBalance - totalPrice
+      updateData.current_balance = newBalance
     }
+    
+    console.log(`[兑换] 扣减后余额: ${newBalance}`)
 
     const { error: childError } = await supabase
       .from('children')
@@ -788,7 +810,8 @@ async function confirmExchange() {
       childName: child.name,
       prizeName: `${prize.name} x${quantity}`,
       message: exchangeMessage.value,
-      currency: priceType === 'gems' ? '宝石' : '金币'
+      currency: latestPriceType === 'gems' ? '宝石' : '金币',
+      remainingBalance: newBalance
     }
 
     closeExchangeModal()
@@ -798,11 +821,13 @@ async function confirmExchange() {
     setTimeout(() => startConfetti(), 100)
 
     // 刷新数据
+    console.log('[兑换] 兑换成功，刷新数据...')
     await Promise.all([
       loadChildren(),
       loadPrizes(),
       loadOrders()
     ])
+    console.log('[兑换] 数据刷新完成')
   } catch (error) {
     console.error('兑换失败:', error)
     alert('兑换失败: ' + error.message)
@@ -1627,6 +1652,17 @@ function handleVisibilityChange() {
 .achievement strong {
   color: #f08c00;
   font-size: 1.4rem;
+}
+
+.balance-info {
+  font-size: 1.1rem;
+  color: #495057;
+  margin: 10px 0;
+}
+
+.balance-info strong {
+  color: #2b8a3e;
+  font-size: 1.3rem;
 }
 
 .message {

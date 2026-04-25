@@ -1,5 +1,12 @@
 <template>
   <div class="dashboard">
+    <!-- 初始加载状态提示 -->
+    <div v-if="isInitialLoading" class="initial-loading-overlay">
+      <div class="loading-spinner">🔄</div>
+      <div class="loading-text">正在加载数据...</div>
+      <div class="loading-subtext">首次加载可能需要几秒钟</div>
+    </div>
+    
     <!-- 页面标题和刷新按钮 -->
     <div class="page-header">
       <h2 class="page-title">🏦 {{ bankTitle }}</h2>
@@ -324,6 +331,7 @@ import RadarChart from '../components/charts/RadarChart.vue'
 import HeatmapChart from '../components/charts/HeatmapChart.vue'
 
 const isRefreshing = ref(false)
+const isInitialLoading = ref(true)  // 初始加载状态
 const isScalingScore = ref(false)
 const poppingScore = ref(null)
 const userName = ref('')
@@ -1129,6 +1137,7 @@ async function refreshData() {
     console.error('❌ 刷新数据失败:', error)
   } finally {
     isRefreshing.value = false
+    isInitialLoading.value = false  // 初始加载完成
     chartsReady.value = true
   }
 }
@@ -1230,6 +1239,45 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 初始加载状态 - 全屏遮罩 */
+.initial-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.loading-spinner {
+  font-size: 3rem;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 1.2rem;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.loading-subtext {
+  font-size: 0.9rem;
+  color: #666;
+}
+
 /* 分类标签样式 */
 .badge-category {
   display: inline-block;
