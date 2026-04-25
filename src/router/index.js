@@ -7,6 +7,7 @@ const Dashboard = () => import('../views/Dashboard.vue')
 const Children = () => import('../views/Children.vue')
 const Rules = () => import('../views/Rules.vue')
 const Tasks = () => import('../views/Tasks.vue')
+const Adventure = () => import('../views/Adventure.vue')
 const Config = () => import('../views/Config.vue')
 const Mall = () => import('../views/Mall.vue')
 
@@ -40,6 +41,12 @@ const routes = [
     name: 'Tasks',
     component: Tasks,
     meta: { title: '任务闯关', icon: '🎯', requiresAuth: true }
+  },
+  {
+    path: '/adventure',
+    name: 'Adventure',
+    component: Adventure,
+    meta: { title: '冒险地图', icon: '🗺️', requiresAuth: true }
   },
   {
     path: '/mall',
