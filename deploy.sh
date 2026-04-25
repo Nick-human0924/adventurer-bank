@@ -11,6 +11,10 @@ echo "🚀 开始部署行为银行..."
 VERSION=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
 echo "📦 版本: v${VERSION}"
 
+# 先拉取远程更新
+echo "📥 拉取远程更新..."
+git pull origin main || true
+
 # 1. 构建
 echo "🔨 构建中..."
 npm run build

@@ -484,15 +484,27 @@ async function loadChildren() {
     const calculatedBalance = tx.earned - tx.spent
     const dbBalance = child.current_balance || 0
 
-    // 如果数据库余额与计算余额差异超过0.01，说明有未记录的变动（如兑换）
-    // 优先信任数据库值，同时记录日志
+    // 如果数据库余额与计算余额差异超过0.01，自动修复数据库
     if (Math.abs(dbBalance - calculatedBalance) > 0.01) {
-      console.log(`⚠️ 余额不一致 ${child.name}: 数据库=${dbBalance}, 计算=${calculatedBalance}, 使用数据库值`)
+      console.log(`⚠️ 余额不一致 ${child.name}: 数据库=${dbBalance}, 计算=${calculatedBalance}, 自动修复中...`)
+      // 异步修复数据库（不阻塞加载）
+      supabase.from('children')
+        .update({ current_balance: calculatedBalance })
+        .eq('id', child.id)
+        .then(({ error }) => {
+          if (error) console.error(`❌ 余额修复失败 ${child.name}:`, error)
+          else console.log(`✅ 余额修复成功 ${child.name}: ${calculatedBalance}`)
+        })
+      
+      return {
+        ...child,
+        current_balance: calculatedBalance  // 使用计算值（已修复）
+      }
     }
 
     return {
       ...child,
-      current_balance: dbBalance  // 优先使用数据库值
+      current_balance: dbBalance  // 使用数据库值
     }
   })
 
@@ -735,6 +747,11 @@ async function confirmExchange() {
       }
     }
 
+    // 确保 child.id 存在
+    if (!child.id) {
+      throw new Error('未找到孩子ID，请重新选择孩子')
+    }
+
     // 使用数据库原子操作扣减余额（避免竞态条件）
     // 优先使用RPC原子操作，如果没有则回退到直接更新
     let updateData = {}
@@ -749,12 +766,18 @@ async function confirmExchange() {
     
     console.log(`[兑换] 扣减后余额: ${newBalance}`)
 
-    const { error: childError } = await supabase
+    const { data: updatedChild, error: childError } = await supabase
       .from('children')
       .update(updateData)
       .eq('id', child.id)
+      .select()
 
     if (childError) throw childError
+    if (!updatedChild || updatedChild.length === 0) {
+      throw new Error('余额更新失败：未找到匹配的孩子记录或权限不足')
+    }
+    
+    console.log(`[兑换] 余额更新成功:`, updatedChild[0])
 
     // 减少库存
     const { error: prizeError } = await supabase
