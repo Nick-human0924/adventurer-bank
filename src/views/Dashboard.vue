@@ -93,8 +93,13 @@
       </div>
     </div>
     
-    <!-- 新增：数据可视化图表区域（延迟挂载，避免与 refreshData 抢占连接） -->
-    <div class="charts-section" v-if="chartsReady && selectedChildId">
+    <!-- 新增：数据可视化图表区域（默认折叠，手动展开） -->
+    <div class="charts-toggle-section" v-if="selectedChildId">
+      <button class="charts-toggle-btn" @click="showCharts = !showCharts">
+        <span>{{ showCharts ? '📉 隐藏趋势图表' : '📈 查看趋势图表' }}</span>
+      </button>
+    </div>
+    <div class="charts-section" v-if="showCharts && chartsReady && selectedChildId">
       <div class="charts-grid">
         <TrendChart :childId="selectedChildId" :currentBalance="getVisibleBalance(selectedChildId)" />
         <RadarChart :childId="selectedChildId" />
@@ -336,6 +341,7 @@ const isScalingScore = ref(false)
 const poppingScore = ref(null)
 const userName = ref('')
 const chartsReady = ref(false)
+const showCharts = ref(false)
 
 const stats = reactive({
   totalChildren: 0,
@@ -632,31 +638,49 @@ let subscriptions = []
 
 // 加载统计数据
 async function loadStats() {
+  const user = await getCachedUser()
+  if (!user) return
+
   // 总孩子数
   const { count: childCount } = await supabase
     .from('children')
     .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
   stats.totalChildren = childCount || 0
 
-  // 总金币发放：直接从 children 表求和 total_points（避免拉取全量 transactions）
+  // 总金币发放：只查当前用户的孩子
   const { data: childrenTotals } = await supabase
     .from('children')
     .select('total_points')
+    .eq('user_id', user.id)
   stats.totalPointsEarned = childrenTotals?.reduce((sum, c) => sum + (c.total_points || 0), 0) || 0
 
-  // 今日交易（使用本地时区）
+  // 今日交易（只查当前用户的孩子）
   const todayDate = new Date()
   const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
-  const { count: todayCount } = await supabase
-    .from('transactions')
-    .select('*', { count: 'exact', head: true })
-    .gte('created_at', today)
-  stats.todayTransactions = todayCount || 0
 
-  // 活跃规则
+  const { data: myChildren } = await supabase
+    .from('children')
+    .select('id')
+    .eq('user_id', user.id)
+  const myChildIds = myChildren?.map(c => c.id) || []
+
+  let todayCount = 0
+  if (myChildIds.length > 0) {
+    const { count } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact', head: true })
+      .in('child_id', myChildIds)
+      .gte('created_at', today)
+    todayCount = count || 0
+  }
+  stats.todayTransactions = todayCount
+
+  // 活跃规则（只查当前用户的）
   const { count: rulesCount } = await supabase
     .from('rules')
     .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
     .eq('is_active', true)
   stats.activeRules = rulesCount || 0
 }
@@ -727,30 +751,12 @@ async function loadRules() {
   console.log('✅ Dashboard: 加载到', goodRules.value.length, '条规则')
 }
 
-// 加载交易记录
+// 加载交易记录（直接用已加载的children，减少一次查询）
 async function loadTransactions() {
   console.log('🔄 Dashboard: 开始加载交易记录...')
   
-  const user = await getCachedUser()
-  if (!user) {
-    console.error('❌ Dashboard: 用户未登录')
-    return
-  }
-  
-  // 获取当前用户的所有孩子ID
-  const { data: userChildren, error: childrenError } = await supabase
-    .from('children')
-    .select('id')
-    .eq('user_id', user.id)
-  
-  if (childrenError) {
-    console.error('❌ Dashboard: 查询孩子ID失败:', childrenError)
-    recentTransactions.value = []
-    return
-  }
-  
-  const childIds = userChildren?.map(c => c.id) || []
-  console.log('📊 Dashboard: 查询交易，孩子IDs:', childIds)
+  // 直接用已加载的 children，避免重复查询
+  const childIds = children.value.map(c => c.id)
   
   if (childIds.length === 0) {
     console.log('⚠️ Dashboard: 没有孩子，交易记录为空')
@@ -767,7 +773,7 @@ async function loadTransactions() {
     `)
     .in('child_id', childIds)
     .order('created_at', { ascending: false })
-    .limit(200)  // 限制200条，足够首页展示和图表分析
+    .limit(30)  // 首页只展示最近30条，足够
   
   if (txError) {
     console.error('❌ Dashboard: 加载交易记录失败:', txError)
@@ -1290,6 +1296,29 @@ onUnmounted(() => {
 }
 
 /* v4.0 图表区域样式 */
+.charts-toggle-section {
+  display: flex;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.charts-toggle-btn {
+  padding: 10px 24px;
+  border: 2px solid #4CAF50;
+  border-radius: 24px;
+  background: white;
+  color: #4CAF50;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.charts-toggle-btn:hover {
+  background: #4CAF50;
+  color: white;
+}
+
 .charts-section {
   margin-bottom: 24px;
 }
