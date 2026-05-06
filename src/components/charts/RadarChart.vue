@@ -33,7 +33,6 @@
 
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
-import Chart from 'chart.js/auto'
 import { useStats } from '../../composables/useStats.js'
 
 const props = defineProps({
@@ -49,6 +48,7 @@ const ranges = [
 const selectedRange = ref(30)
 const chartRef = ref(null)
 let chart = null
+let ChartModule = null
 
 const { categoryData, fetchCategories } = useStats(props.childId)
 
@@ -71,14 +71,19 @@ const insights = computed(() => {
   return result
 })
 
-function initChart() {
+async function initChart() {
   if (!chartRef.value || !categoryData.value) return
+
+  if (!ChartModule) {
+    const module = await import('chart.js/auto')
+    ChartModule = module.default
+  }
   
   const data = categories.map(cat => categoryData.value[cat] || 0)
   
   const ctx = chartRef.value.getContext('2d')
   
-  chart = new Chart(ctx, {
+  chart = new ChartModule(ctx, {
     type: 'radar',
     data: {
       labels: categories,
@@ -133,7 +138,7 @@ async function changeRange(days) {
 
 onMounted(async () => {
   await fetchCategories()
-  initChart()
+  await initChart()
 })
 
 watch(categoryData, updateChart, { deep: true })
