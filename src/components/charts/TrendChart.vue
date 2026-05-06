@@ -39,7 +39,6 @@
 
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
-import Chart from 'chart.js/auto'
 import { useStats } from '../../composables/useStats.js'
 
 const props = defineProps({
@@ -56,6 +55,7 @@ const ranges = [
 const selectedRange = ref(30)
 const chartRef = ref(null)
 let chart = null
+let ChartModule = null
 
 const { trendData, fetchTrend } = useStats(props.childId)
 
@@ -68,12 +68,17 @@ const currentGems = computed(() => {
   return 0
 })
 
-function initChart() {
+async function initChart() {
   if (!chartRef.value || !trendData.value) return
+
+  if (!ChartModule) {
+    const module = await import('chart.js/auto')
+    ChartModule = module.default
+  }
   
   const ctx = chartRef.value.getContext('2d')
   
-  chart = new Chart(ctx, {
+  chart = new ChartModule(ctx, {
     type: 'line',
     data: {
       labels: trendData.value.labels,
@@ -147,7 +152,7 @@ async function changeRange(days) {
 
 onMounted(async () => {
   await fetchTrend(selectedRange.value)
-  initChart()
+  await initChart()
 })
 
 watch(trendData, updateChart, { deep: true })
