@@ -166,25 +166,11 @@ async function handleLogout() {
   $router.push('/login')
 }
 
-onMounted(async () => {
-  // 检查认证状态
-  await checkAuth()
-  
-  // 监听认证状态变化
-  supabase.auth.onAuthStateChange((event, session) => {
-    isAuthenticated.value = !!session
-    if (session?.user) {
-      userEmail.value = session.user.email
-    } else {
-      userEmail.value = ''
-    }
-  })
-  
-  // 检查是否移动端
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
-  
-  // 数据库连接检查 - 非阻塞后台运行，不影响用户界面
+let dbCheckScheduled = false
+
+function runDatabaseCheck() {
+  if (!isAuthenticated.value) return
+
   initDatabase().then(result => {
     if (result.success) {
       isConnected.value = true
@@ -198,6 +184,40 @@ onMounted(async () => {
     console.error('数据库初始化失败:', error)
     // 后台失败不阻断用户，让页面级请求自行报错
   })
+}
+
+function scheduleDatabaseCheck() {
+  if (dbCheckScheduled || !isAuthenticated.value) return
+  dbCheckScheduled = true
+
+  const schedule = window.requestIdleCallback || ((callback) => window.setTimeout(callback, 1500))
+  schedule(runDatabaseCheck, { timeout: 4000 })
+}
+
+onMounted(async () => {
+  // 检查认证状态
+  await checkAuth()
+  scheduleDatabaseCheck()
+  
+  // 监听认证状态变化
+  supabase.auth.onAuthStateChange((event, session) => {
+    isAuthenticated.value = !!session
+    if (session?.user) {
+      userEmail.value = session.user.email
+      currentUser.value = session.user
+      scheduleDatabaseCheck()
+    } else {
+      userEmail.value = ''
+      currentUser.value = null
+      dbCheckScheduled = false
+    }
+  })
+  
+  // 检查是否移动端
+  checkMobile()
+  window.addEventListener('resize', checkMobile)
+  
+  // 数据库连接检查已调度到首屏渲染之后，避免和首页数据请求竞争
 })
 </script>
 
